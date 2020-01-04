@@ -83,6 +83,12 @@
 		reg = <0x57>;
 		label = "MAX30101";
 	};
+
+    htu21d@40 {
+        compatible = "ms,htu21d";
+        reg = <0x40>;
+        label = "HTU21D";
+    };
 };
 
 &i2c1 {
