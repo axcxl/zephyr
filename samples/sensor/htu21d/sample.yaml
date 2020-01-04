@@ -1,0 +1,14 @@
+sample:
+  name: HTU21D Temperature and Humidity Monitor
+tests:
+  sample.sensor.htu21d:
+    harness: console
+    tags: sensors
+    depends_on: i2c htu21d
+    harness_config:
+        type: multi_line
+        ordered: yes
+        regex:
+            - "Temperature: (.*)"
+            - "Relative Humidity: (.*)"
+        fixture: fixture_i2c_htu21d
