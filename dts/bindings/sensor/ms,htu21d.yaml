@@ -1,0 +1,9 @@
+# Copyright (c) 2017, Linaro Limited
+# SPDX-License-Identifier: Apache-2.0
+
+description: Measurement Specialties HTU21D humidity and temperature sensor
+
+compatible: "ms,htu21d"
+
+include: i2c-device.yaml
+

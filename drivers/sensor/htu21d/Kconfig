@@ -1,0 +1,14 @@
+# Copyright (c) 2016 Intel Corporation
+# SPDX-License-Identifier: Apache-2.0
+
+menuconfig HTU21D
+	bool "HTU21D temperature and humidity sensor"
+	depends on I2C && HAS_DTS_I2C
+	help
+	  Enable driver for I2C version of HTU21 temperature and humidity sensor.
+
+if HTU21D
+
+#TODO 
+
+endif # HTU21D
