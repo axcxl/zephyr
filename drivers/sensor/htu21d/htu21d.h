@@ -12,6 +12,22 @@
 #include <zephyr/types.h>
 #include <drivers/gpio.h>
 
+/* HTU21D device commands */
+#define HTU21D_RESET_COMMAND				0xFE
+#define HTU21D_READ_TEMPERATURE				0xF3
+#define HTU21D_READ_HUMIDITY				0xF5
+#define HTU21D_WRITE_USER_REG_COMMAND		0xE6
+#define HTU21D_READ_USER_REG_COMMAND		0xE7
+
+// Coefficients for temperature computation
+#define TEMPERATURE_COEFF_MUL								(175.72)
+#define TEMPERATURE_COEFF_ADD								(-46.85)
+
+// Coefficients for relative humidity computation
+#define HUMIDITY_COEFF_MUL									(125)
+#define HUMIDITY_COEFF_ADD									(-6)
+
+
 struct htu21d_data {
 	struct device *i2c;
 
