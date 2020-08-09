@@ -38,7 +38,7 @@ LOG_MODULE_REGISTER(soc);
 
 static int nordicsemi_nrf53_init(struct device *arg)
 {
-	u32_t key;
+	uint32_t key;
 
 	ARG_UNUSED(arg);
 
@@ -56,7 +56,7 @@ static int nordicsemi_nrf53_init(struct device *arg)
 
 #if defined(CONFIG_SOC_NRF5340_CPUAPP) && \
 	!defined(CONFIG_TRUSTED_EXECUTION_NONSECURE)
-	*((u32_t *)0x500046D0) = 0x1;
+	*((uint32_t *)0x500046D0) = 0x1;
 #endif
 
 #if defined(CONFIG_SOC_DCDC_NRF53X_APP)
@@ -79,7 +79,7 @@ static int nordicsemi_nrf53_init(struct device *arg)
 	return 0;
 }
 
-void arch_busy_wait(u32_t time_us)
+void arch_busy_wait(uint32_t time_us)
 {
 	nrfx_coredep_delay_us(time_us);
 }
@@ -89,5 +89,34 @@ void z_platform_init(void)
 	SystemInit();
 }
 
+#if defined(CONFIG_SOC_NRF5340_CPUAPP) && \
+	!defined(CONFIG_TRUSTED_EXECUTION_NONSECURE)
+bool nrf53_has_erratum19(void)
+{
+	if (NRF_FICR->INFO.PART == 0x5340) {
+		if (NRF_FICR->INFO.VARIANT == 0x41414142) {
+			return true;
+		}
+	}
+	return false;
+}
+
+#ifndef CONFIG_NRF5340_CPUAPP_ERRATUM19
+static int check_erratum19(struct device *arg)
+{
+	ARG_UNUSED(arg);
+	if (nrf53_has_erratum19()) {
+		LOG_ERR("This device is affected by nRF53 Erratum 19,");
+		LOG_ERR("but workarounds have not been enabled.");
+		LOG_ERR("See CONFIG_NRF5340_CPUAPP_ERRATUM19.");
+		k_panic();
+	}
+
+	return 0;
+}
+
+SYS_INIT(check_erratum19, POST_KERNEL, CONFIG_APPLICATION_INIT_PRIORITY);
+#endif
+#endif
 
 SYS_INIT(nordicsemi_nrf53_init, PRE_KERNEL_1, 0);

@@ -11,8 +11,7 @@
 # 1.4. board_*
 # 1.5. Misc.
 # 2. Kconfig-aware extensions
-# 2.1 *_if_kconfig
-# 2.2 Misc
+# 2.1 Misc
 # 3. CMake-generic extensions
 # 3.1. *_ifdef
 # 3.2. *_ifndef
@@ -1020,42 +1019,8 @@ endfunction()
 # Kconfig is a configuration language developed for the Linux
 # kernel. The below functions integrate CMake with Kconfig.
 #
-# 2.1 *_if_kconfig
-#
-# Functions for conditionally including directories and source files
-# that have matching KConfig values.
-#
-# zephyr_library_sources_if_kconfig(fft.c)
-# is the same as
-# zephyr_library_sources_ifdef(CONFIG_FFT fft.c)
-#
-# add_subdirectory_if_kconfig(serial)
-# is the same as
-# add_subdirectory_ifdef(CONFIG_SERIAL serial)
-function(add_subdirectory_if_kconfig dir)
-  string(TOUPPER config_${dir} UPPER_CASE_CONFIG)
-  add_subdirectory_ifdef(${UPPER_CASE_CONFIG} ${dir})
-endfunction()
 
-function(target_sources_if_kconfig target scope item)
-  get_filename_component(item_basename ${item} NAME_WE)
-  string(TOUPPER CONFIG_${item_basename} UPPER_CASE_CONFIG)
-  target_sources_ifdef(${UPPER_CASE_CONFIG} ${target} ${scope} ${item})
-endfunction()
-
-function(zephyr_library_sources_if_kconfig item)
-  get_filename_component(item_basename ${item} NAME_WE)
-  string(TOUPPER CONFIG_${item_basename} UPPER_CASE_CONFIG)
-  zephyr_library_sources_ifdef(${UPPER_CASE_CONFIG} ${item})
-endfunction()
-
-function(zephyr_sources_if_kconfig item)
-  get_filename_component(item_basename ${item} NAME_WE)
-  string(TOUPPER CONFIG_${item_basename} UPPER_CASE_CONFIG)
-  zephyr_sources_ifdef(${UPPER_CASE_CONFIG} ${item})
-endfunction()
-
-# 2.2 Misc
+# 2.1 Misc
 #
 # import_kconfig(<prefix> <kconfig_fragment> [<keys>])
 #
@@ -1413,7 +1378,7 @@ function(toolchain_parse_make_rule input_file include_files)
 
   # The file is formatted like this:
   # empty_file.o: misc/empty_file.c \
-  # nrf52840_pca10056/nrf52840_pca10056.dts \
+  # nrf52840dk_nrf52840/nrf52840dk_nrf52840.dts \
   # nrf52840_qiaa.dtsi
 
   # Get rid of the backslashes
@@ -1442,7 +1407,7 @@ endfunction()
 # Usage:
 #   print(BOARD)
 #
-# will print: "BOARD: nrf52_pca10040"
+# will print: "BOARD: nrf52dk_nrf52832"
 function(print arg)
   message(STATUS "${arg}: ${${arg}}")
 endfunction()
@@ -1481,14 +1446,20 @@ macro(assert_exists var)
 endmacro()
 
 function(print_usage)
+  if(NOT CMAKE_MAKE_PROGRAM)
+    # Create dummy project, in order to obtain make program for correct usage printing.
+    project(dummy_print_usage)
+  endif()
   message("see usage:")
   string(REPLACE ";" " " BOARD_ROOT_SPACE_SEPARATED "${BOARD_ROOT}")
   string(REPLACE ";" " " SHIELD_LIST_SPACE_SEPARATED "${SHIELD_LIST}")
   execute_process(
     COMMAND
     ${CMAKE_COMMAND}
+    -DZEPHYR_BASE=${ZEPHYR_BASE}
     -DBOARD_ROOT_SPACE_SEPARATED=${BOARD_ROOT_SPACE_SEPARATED}
     -DSHIELD_LIST_SPACE_SEPARATED=${SHIELD_LIST_SPACE_SEPARATED}
+    -DCMAKE_MAKE_PROGRAM=${CMAKE_MAKE_PROGRAM}
     -P ${ZEPHYR_BASE}/cmake/usage/usage.cmake
     )
 endfunction()

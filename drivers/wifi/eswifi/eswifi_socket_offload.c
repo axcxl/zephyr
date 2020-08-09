@@ -4,8 +4,8 @@
  * SPDX-License-Identifier: Apache-2.0
  */
 
-#include <logging/log.h>
-LOG_MODULE_REGISTER(wifi_eswifi, CONFIG_WIFI_LOG_LEVEL);
+#include "eswifi_log.h"
+LOG_MODULE_DECLARE(LOG_MODULE_NAME);
 
 #include <zephyr.h>
 #include <kernel.h>
@@ -30,6 +30,8 @@ LOG_MODULE_REGISTER(wifi_eswifi, CONFIG_WIFI_LOG_LEVEL);
  */
 #define SD_TO_OBJ(sd) ((void *)(sd + 1))
 #define OBJ_TO_SD(obj) (((int)obj) - 1)
+/* Default socket context (50CE) */
+#define ESWIFI_INIT_CONTEXT	INT_TO_POINTER(0x50CE)
 
 static struct eswifi_dev *eswifi;
 static const struct socket_op_vtable eswifi_socket_fd_op_vtable;
@@ -56,7 +58,7 @@ static int eswifi_socket_connect(void *obj, const struct sockaddr *addr,
 	int ret;
 
 	if ((addrlen == 0) || (addr == NULL) ||
-	    (sock > ESWIFI_OFFLOAD_MAX_SOCKETS)) {
+	    (sock >= ESWIFI_OFFLOAD_MAX_SOCKETS)) {
 		return -EINVAL;
 	}
 
@@ -95,7 +97,7 @@ static int __eswifi_socket_accept(void *obj, struct sockaddr *addr,
 	int ret;
 
 	if ((addrlen == NULL) || (addr == NULL) ||
-	    (sock > ESWIFI_OFFLOAD_MAX_SOCKETS)) {
+	    (sock >= ESWIFI_OFFLOAD_MAX_SOCKETS)) {
 		return -EINVAL;
 	}
 
@@ -171,7 +173,7 @@ static int map_credentials(int sd, const void *optval, socklen_t optlen)
 				return -EINVAL;
 			}
 
-			snprintf(eswifi->buf, sizeof(eswifi->buf),
+			snprintk(eswifi->buf, sizeof(eswifi->buf),
 				 "PG=%d,%d,%d\r", 0, id, cert->len);
 			bytes = strlen(eswifi->buf);
 			memcpy(&eswifi->buf[bytes], cert->buf, cert->len);
@@ -184,7 +186,7 @@ static int map_credentials(int sd, const void *optval, socklen_t optlen)
 				return ret;
 			}
 
-			snprintf(eswifi->buf, sizeof(eswifi->buf), "PF=0,0\r");
+			snprintk(eswifi->buf, sizeof(eswifi->buf), "PF=0,0\r");
 			ret = eswifi_at_cmd(eswifi, eswifi->buf);
 			if (ret < 0) {
 				return ret;
@@ -251,7 +253,7 @@ static ssize_t eswifi_socket_send(void *obj, const void *buf, size_t len,
 	__select_socket(eswifi, socket->index);
 
 	/* header */
-	snprintf(eswifi->buf, sizeof(eswifi->buf), "S3=%u\r", len);
+	snprintk(eswifi->buf, sizeof(eswifi->buf), "S3=%u\r", len);
 	offset = strlen(eswifi->buf);
 
 	/* copy payload */
@@ -292,7 +294,7 @@ static ssize_t eswifi_socket_recv(void *obj, void *buf, size_t max_len,
 	struct net_pkt *pkt;
 
 	if ((max_len == 0) || (buf == NULL) ||
-	    (sock > ESWIFI_OFFLOAD_MAX_SOCKETS)) {
+	    (sock >= ESWIFI_OFFLOAD_MAX_SOCKETS)) {
 		return -EINVAL;
 	}
 
@@ -354,7 +356,7 @@ static int eswifi_socket_close(int sock)
 	struct net_pkt *pkt;
 	int ret;
 
-	if (sock > ESWIFI_OFFLOAD_MAX_SOCKETS) {
+	if (sock >= ESWIFI_OFFLOAD_MAX_SOCKETS) {
 		return -EINVAL;
 	}
 
@@ -391,8 +393,7 @@ static int eswifi_socket_open(int family, int type, int proto)
 
 	eswifi_lock(eswifi);
 
-	/* Assign dummy context SOCkEt(50CE) */
-	idx = __eswifi_socket_new(eswifi, family, type, proto, 0x50CE);
+	idx = __eswifi_socket_new(eswifi, family, type, proto, ESWIFI_INIT_CONTEXT);
 	if (idx < 0) {
 		goto unlock;
 	}
@@ -412,7 +413,7 @@ unlock:
 	return idx;
 }
 
-static int eswifi_socket_poll(struct pollfd *fds, int nfds, int msecs)
+static int eswifi_socket_poll(struct zsock_pollfd *fds, int nfds, int msecs)
 {
 	struct eswifi_off_socket *socket;
 	int sock, ret;
@@ -434,7 +435,7 @@ static int eswifi_socket_poll(struct pollfd *fds, int nfds, int msecs)
 		return -1;
 	}
 
-	if (sock > ESWIFI_OFFLOAD_MAX_SOCKETS) {
+	if (sock >= ESWIFI_OFFLOAD_MAX_SOCKETS) {
 		errno = EINVAL;
 		return -1;
 	}
@@ -447,7 +448,7 @@ static int eswifi_socket_poll(struct pollfd *fds, int nfds, int msecs)
 		return -1;
 	}
 
-	ret = k_sem_take(&socket->read_sem, msecs);
+	ret = k_sem_take(&socket->read_sem, K_MSEC(msecs));
 	return ret;
 }
 
@@ -458,8 +459,8 @@ static int eswifi_socket_bind(void *obj, const struct sockaddr *addr,
 	struct eswifi_off_socket *socket;
 	int ret;
 
-	if ((addrlen == NULL) || (addr == NULL) ||
-	    (sock > ESWIFI_OFFLOAD_MAX_SOCKETS)) {
+	if ((addrlen == 0) || (addr == NULL) ||
+	    (sock >= ESWIFI_OFFLOAD_MAX_SOCKETS)) {
 		return -EINVAL;
 	}
 

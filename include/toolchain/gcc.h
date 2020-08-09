@@ -50,16 +50,17 @@
 
 /* C++11 has static_assert built in */
 #ifdef __cplusplus
-#define BUILD_ASSERT(EXPR) static_assert(EXPR, "")
-#define BUILD_ASSERT_MSG(EXPR, MSG) static_assert(EXPR, MSG)
+#define BUILD_ASSERT(EXPR, MSG...) static_assert(EXPR, "" MSG)
+#define BUILD_ASSERT_MSG(EXPR, MSG) __DEPRECATED_MACRO BUILD_ASSERT(EXPR, MSG)
+
 /*
  * GCC 4.6 and higher have the C11 _Static_assert built in, and its
  * output is easier to understand than the common BUILD_ASSERT macros.
  */
 #elif (__GNUC__ > 4 || (__GNUC__ == 4 && __GNUC_MINOR__ >= 6)) || \
 	(__STDC_VERSION__) >= 201100
-#define BUILD_ASSERT(EXPR) _Static_assert(EXPR, "")
-#define BUILD_ASSERT_MSG(EXPR, MSG) _Static_assert(EXPR, MSG)
+#define BUILD_ASSERT(EXPR, MSG...) _Static_assert(EXPR, "" MSG)
+#define BUILD_ASSERT_MSG(EXPR, MSG) __DEPRECATED_MACRO BUILD_ASSERT(EXPR, MSG)
 #endif
 
 #include <toolchain/common.h>
@@ -232,28 +233,24 @@ do {                                                                    \
 
 #if defined(CONFIG_ARM) && !defined(CONFIG_ARM64)
 
-#if defined(CONFIG_ISA_THUMB2)
+#if defined(CONFIG_ASSEMBLER_ISA_THUMB2)
 
 #define FUNC_CODE() .thumb;
 #define FUNC_INSTR(a)
 
-#elif defined(CONFIG_ISA_ARM)
+#else
 
 #define FUNC_CODE() .code 32
 #define FUNC_INSTR(a)
 
-#else
-
-#error unknown instruction set
-
-#endif /* ISA */
+#endif /* CONFIG_ASSEMBLER_ISA_THUMB2 */
 
 #else
 
 #define FUNC_CODE()
 #define FUNC_INSTR(a)
 
-#endif /* !CONFIG_ARM */
+#endif /* CONFIG_ARM && !CONFIG_ARM64 */
 
 #endif /* _ASMLANGUAGE */
 
@@ -359,14 +356,18 @@ do {                                                                    \
 
 #endif /* _ASMLANGUAGE */
 
-#if defined(CONFIG_ARM) && defined(_ASMLANGUAGE)
-#if defined(CONFIG_ISA_THUMB2)
+#if defined(_ASMLANGUAGE)
+#if defined(CONFIG_ARM) && !defined(CONFIG_ARM64)
+#if defined(CONFIG_ASSEMBLER_ISA_THUMB2)
 /* '.syntax unified' is a gcc-ism used in thumb-2 asm files */
 #define _ASM_FILE_PROLOGUE .text; .syntax unified; .thumb
 #else
 #define _ASM_FILE_PROLOGUE .text; .code 32
-#endif
-#endif
+#endif /* CONFIG_ASSEMBLER_ISA_THUMB2 */
+#elif defined(CONFIG_ARM64)
+#define _ASM_FILE_PROLOGUE .text
+#endif /* CONFIG_ARM64 || (CONFIG_ARM && !CONFIG_ARM64)*/
+#endif /* _ASMLANGUAGE */
 
 /*
  * These macros generate absolute symbols for GCC
@@ -440,7 +441,7 @@ do {                                                                    \
  * @note Macro has limited usage compared to the standard macro as it cannot be
  *	 used:
  *	 - to generate constant integer, e.g. __aligned(Z_MAX(4,5))
- *	 - static variable, e.g. array like static u8_t array[Z_MAX(...)];
+ *	 - static variable, e.g. array like static uint8_t array[Z_MAX(...)];
  */
 #define Z_MAX(a, b) ({ \
 		/* random suffix to avoid naming conflict */ \
@@ -460,6 +461,22 @@ do {                                                                    \
 		__typeof__(b) _value_b_ = (b); \
 		_value_a_ < _value_b_ ? _value_a_ : _value_b_; \
 	})
+
+/**
+ * @brief Calculate power of two ceiling for some nonzero value
+ *
+ * @param x Nonzero unsigned long value
+ * @return X rounded up to the next power of two
+ */
+#ifdef CONFIG_64BIT
+#define Z_POW2_CEIL(x) ((1UL << (63U - __builtin_clzl(x))) < x ?  \
+		1UL << (63U - __builtin_clzl(x) + 1U) : \
+		1UL << (63U - __builtin_clzl(x)))
+#else
+#define Z_POW2_CEIL(x) ((1UL << (31U - __builtin_clzl(x))) < x ?  \
+		1UL << (31U - __builtin_clzl(x) + 1U) : \
+		1UL << (31U - __builtin_clzl(x)))
+#endif
 
 #endif /* !_LINKER */
 #endif /* ZEPHYR_INCLUDE_TOOLCHAIN_GCC_H_ */

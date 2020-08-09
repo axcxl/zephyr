@@ -39,6 +39,12 @@
   #define ROM_ADDR (CONFIG_FLASH_BASE_ADDRESS + CONFIG_FLASH_LOAD_OFFSET)
 #endif
 
+/*
+ * MMU currently supports 4 kB translation granule size,
+ * so all regions are required to be 4 kB aligned
+ */
+#define PAGE_SIZE	0x1000
+
 #if CONFIG_FLASH_LOAD_SIZE > 0
   #define ROM_SIZE CONFIG_FLASH_LOAD_SIZE
 #else
@@ -59,31 +65,18 @@
   #define RAM_ADDR CONFIG_SRAM_BASE_ADDRESS
 #endif
 
-/* Set alignment to CONFIG_ARM_MPU_REGION_MIN_ALIGN_AND_SIZE
- * to make linker section alignment comply with MPU granularity.
- */
-#if defined(CONFIG_ARM_MPU_REGION_MIN_ALIGN_AND_SIZE)
-  _region_min_align = CONFIG_ARM_MPU_REGION_MIN_ALIGN_AND_SIZE;
+#if defined(CONFIG_ARM_MMU)
+  _region_min_align = PAGE_SIZE;
 #else
-  /* If building without MPU support, use default 4-byte alignment. */
+  /* If building without MMU support, use default 4-byte alignment. */
   _region_min_align = 4;
 #endif
 
-#if defined(CONFIG_MPU_REQUIRES_POWER_OF_TWO_ALIGNMENT)
-  #define MPU_ALIGN(region_size) \
-    . = ALIGN(_region_min_align); \
-    . = ALIGN( 1 << LOG2CEIL(region_size))
-#else
-  #define MPU_ALIGN(region_size) \
-    . = ALIGN(_region_min_align)
-#endif
+#define MMU_ALIGN    . = ALIGN(_region_min_align)
 
 MEMORY
 {
     FLASH     (rx) : ORIGIN = ROM_ADDR, LENGTH = ROM_SIZE
-#ifdef DT_CCM_BASE_ADDRESS
-    CCM       (rw) : ORIGIN = DT_CCM_BASE_ADDRESS, LENGTH = DT_CCM_SIZE * 1K
-#endif
     SRAM      (wx) : ORIGIN = RAM_ADDR, LENGTH = RAM_SIZE
     /* Used by and documented in include/linker/intlist.ld */
     IDT_LIST  (wx) : ORIGIN = (RAM_ADDR + RAM_SIZE), LENGTH = 2K
@@ -100,12 +93,12 @@ SECTIONS
      * .plt and .iplt are here according to 'arm-zephyr-elf-ld --verbose',
      * before text section.
      */
-    SECTION_PROLOGUE(.plt,,)
+    /DISCARD/ :
     {
         *(.plt)
     }
 
-    SECTION_PROLOGUE(.iplt,,)
+    /DISCARD/ :
     {
         *(.iplt)
     }
@@ -114,39 +107,18 @@ SECTIONS
 
     _image_rom_start = ROM_ADDR;
 
-    SECTION_PROLOGUE(rom_start,,)
+    SECTION_PROLOGUE(_TEXT_SECTION_NAME,,)
     {
-
-#if defined(CONFIG_SW_VECTOR_RELAY)
-        KEEP(*(.vector_relay_table))
-        KEEP(*(".vector_relay_table.*"))
-        KEEP(*(.vector_relay_handler))
-        KEEP(*(".vector_relay_handler.*"))
-#endif
+        _image_text_start = .;
 
         _vector_start = .;
         KEEP(*(.exc_vector_table))
         KEEP(*(".exc_vector_table.*"))
 
-        KEEP(*(IRQ_VECTOR_TABLE))
-
         KEEP(*(.vectors))
 
         _vector_end = .;
 
-        KEEP(*(.openocd_dbg))
-        KEEP(*(".openocd_dbg.*"))
-    } GROUP_LINK_IN(ROMABLE_REGION)
-
-#ifdef CONFIG_CODE_DATA_RELOCATION
-
-#include <linker_relocate.ld>
-
-#endif /* CONFIG_CODE_DATA_RELOCATION */
-
-    SECTION_PROLOGUE(_TEXT_SECTION_NAME,,)
-    {
-        _image_text_start = .;
         *(.text)
         *(".text.*")
         *(.gnu.linkonce.t.*)
@@ -157,12 +129,13 @@ SECTIONS
          */
         *(.glue_7t) *(.glue_7) *(.vfp11_veneer) *(.v4_bx)
 
-#include <linker/priv_stacks-text.ld>
 #include <linker/kobject-text.ld>
 
+        MMU_ALIGN;
     } GROUP_LINK_IN(ROMABLE_REGION)
 
     _image_text_end = .;
+    _image_text_size = _image_text_end - _image_text_start;
 
 #if defined (CONFIG_CPLUSPLUS)
     SECTION_PROLOGUE(.ARM.extab,,)
@@ -195,6 +168,11 @@ SECTIONS
 
     SECTION_PROLOGUE(_RODATA_SECTION_NAME,,)
     {
+        KEEP(*(_IRQ_VECTOR_TABLE_SECTION_NAME))
+
+        KEEP(*(.openocd_dbg))
+        KEEP(*(".openocd_dbg.*"))
+
         *(.rodata)
         *(".rodata.*")
         *(.gnu.linkonce.r.*)
@@ -203,44 +181,23 @@ SECTIONS
  * zephyr_linker_sources() Cmake function.
  */
 #include <snippets-rodata.ld>
-#ifdef CONFIG_SOC_RODATA_LD
-#include <soc-rodata.ld>
-#endif
 
-#ifdef CONFIG_CUSTOM_RODATA_LD
-/* Located in project source directory */
-#include <custom-rodata.ld>
-#endif
-
-#include <linker/priv_stacks-rom.ld>
 #include <linker/kobject-rom.ld>
 
-        /*
-         * For XIP images, in order to avoid the situation when __data_rom_start
-         * is 32-bit aligned, but the actual data is placed right after rodata
-         * section, which may not end exactly at 32-bit border, pad rodata
-         * section, so __data_rom_start points at data and it is 32-bit aligned.
-         *
-         * On non-XIP images this may enlarge image size up to 3 bytes. This
-         * generally is not an issue, since modern ROM and FLASH memory is
-         * usually 4k aligned.
-         */
-        . = ALIGN(4);
     } GROUP_LINK_IN(ROMABLE_REGION)
 
 #include <linker/cplusplus-rom.ld>
+    MMU_ALIGN;
 
     _image_rodata_end = .;
-    MPU_ALIGN(_image_rodata_end -_image_rom_start);
+    _image_rodata_size = _image_rodata_end - _image_rodata_start;
     _image_rom_end = .;
-
-    GROUP_END(ROMABLE_REGION)
 
     /*
      * These are here according to 'arm-zephyr-elf-ld --verbose',
      * before data section.
      */
-    SECTION_PROLOGUE(.got,,)
+    /DISCARD/ :
     {
         *(.got.plt)
         *(.igot.plt)
@@ -248,11 +205,13 @@ SECTIONS
         *(.igot)
     }
 
+    GROUP_END(ROMABLE_REGION)
+
     GROUP_START(RAMABLE_REGION)
 
     . = RAM_ADDR;
     /* Align the start of image SRAM with the
-     * minimum granularity required by MPU.
+     * minimum granularity required by MMU.
      */
     . = ALIGN(_region_min_align);
     _image_ram_start = .;
@@ -264,7 +223,7 @@ SECTIONS
 
 #if defined(CONFIG_USERSPACE)
 #define APP_SHARED_ALIGN . = ALIGN(_region_min_align);
-#define SMEM_PARTITION_ALIGN MPU_ALIGN
+#define SMEM_PARTITION_ALIGN MMU_ALIGN
 
 #include <app_smem.ld>
 
@@ -298,25 +257,7 @@ SECTIONS
         __bss_end = ALIGN(4);
     } GROUP_DATA_LINK_IN(RAMABLE_REGION, RAMABLE_REGION)
 
-    SECTION_PROLOGUE(_NOINIT_SECTION_NAME,(NOLOAD),)
-    {
-        /*
-         * This section is used for non-initialized objects that
-         * will not be cleared during the boot process.
-         */
-        *(.noinit)
-        *(".noinit.*")
-        *(".kernel_noinit.*")
-
-/* Located in generated directory. This file is populated by the
- * zephyr_linker_sources() Cmake function.
- */
-#include <snippets-noinit.ld>
-#ifdef CONFIG_SOC_NOINIT_LD
-#include <soc-noinit.ld>
-#endif
-
-    } GROUP_LINK_IN(RAMABLE_REGION)
+#include <linker/common-noinit.ld>
 
     SECTION_DATA_PROLOGUE(_DATA_SECTION_NAME,,)
     {
@@ -329,14 +270,6 @@ SECTIONS
  * zephyr_linker_sources() Cmake function.
  */
 #include <snippets-rwdata.ld>
-#ifdef CONFIG_SOC_RWDATA_LD
-#include <soc-rwdata.ld>
-#endif
-
-#ifdef CONFIG_CUSTOM_RWDATA_LD
-/* Located in project source directory */
-#include <custom-rwdata.ld>
-#endif
 
 #ifdef CONFIG_CODE_DATA_RELOCATION
 #include <linker_sram_data_relocate.ld>
@@ -347,11 +280,7 @@ SECTIONS
     __data_rom_start = LOADADDR(_DATA_SECTION_NAME);
 
 #include <linker/common-ram.ld>
-#include <linker/priv_stacks.ld>
 #include <linker/kobject.ld>
-
-#include <linker/priv_stacks-noinit.ld>
-
 #include <linker/cplusplus-ram.ld>
 
     __data_ram_end = .;
@@ -366,11 +295,6 @@ SECTIONS
     __kernel_ram_size = __kernel_ram_end - __kernel_ram_start;
 
     GROUP_END(RAMABLE_REGION)
-
-#ifdef CONFIG_CUSTOM_SECTIONS_LD
-/* Located in project source directory */
-#include <custom-sections.ld>
-#endif
 
 /* Located in generated directory. This file is populated by the
  * zephyr_linker_sources() Cmake function.

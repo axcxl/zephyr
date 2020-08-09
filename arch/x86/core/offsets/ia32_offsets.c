@@ -24,9 +24,12 @@
 
 /* list of headers that define whose structure offsets will be generated */
 
+#ifndef _X86_OFFSETS_INC_
+#define _X86_OFFSETS_INC_
+
 #include <arch/x86/mmustructs.h>
 
-#if defined(CONFIG_LAZY_FP_SHARING)
+#if defined(CONFIG_LAZY_FPU_SHARING)
 GEN_OFFSET_SYM(_thread_arch_t, excNestCount);
 #endif
 
@@ -66,3 +69,5 @@ GEN_OFFSET_SYM(z_arch_esf_t, eflags);
 /* size of the MMU_REGION structure. Used by linker scripts */
 
 GEN_ABSOLUTE_SYM(__MMU_REGION_SIZEOF, sizeof(struct mmu_region));
+
+#endif /* _X86_OFFSETS_INC_ */

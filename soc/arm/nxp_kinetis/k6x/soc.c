@@ -33,6 +33,8 @@
 
 #define TIMESRC_OSCERCLK        (2)
 
+#define RUNM_HSRUN              (3)
+
 static const osc_config_t oscConfig = {
 	.freq = CONFIG_OSC_XTAL0_FREQ,
 	.capLoad = 0,
@@ -65,10 +67,10 @@ static const mcg_pll_config_t pll0Config = {
 static const sim_clock_config_t simConfig = {
 	.pllFllSel = PLLFLLSEL_MCGPLLCLK, /* PLLFLLSEL select PLL. */
 	.er32kSrc = ER32KSEL_RTC,         /* ERCLK32K selection, use RTC. */
-	.clkdiv1 = SIM_CLKDIV1_OUTDIV1(CONFIG_K64_CORE_CLOCK_DIVIDER - 1) |
-		   SIM_CLKDIV1_OUTDIV2(CONFIG_K64_BUS_CLOCK_DIVIDER - 1) |
-		   SIM_CLKDIV1_OUTDIV3(CONFIG_K64_FLEXBUS_CLOCK_DIVIDER - 1) |
-		   SIM_CLKDIV1_OUTDIV4(CONFIG_K64_FLASH_CLOCK_DIVIDER - 1),
+	.clkdiv1 = SIM_CLKDIV1_OUTDIV1(CONFIG_K6X_CORE_CLOCK_DIVIDER - 1) |
+		   SIM_CLKDIV1_OUTDIV2(CONFIG_K6X_BUS_CLOCK_DIVIDER - 1) |
+		   SIM_CLKDIV1_OUTDIV3(CONFIG_K6X_FLEXBUS_CLOCK_DIVIDER - 1) |
+		   SIM_CLKDIV1_OUTDIV4(CONFIG_K6X_FLASH_CLOCK_DIVIDER - 1),
 };
 
 /**
@@ -104,9 +106,12 @@ static ALWAYS_INLINE void clock_init(void)
 #if CONFIG_ETH_MCUX
 	CLOCK_SetEnetTime0Clock(TIMESRC_OSCERCLK);
 #endif
+#if CONFIG_ETH_MCUX_RMII_EXT_CLK
+	CLOCK_SetRmii0Clock(1);
+#endif
 #if CONFIG_USB_KINETIS
 	CLOCK_EnableUsbfs0Clock(kCLOCK_UsbSrcPll0,
-				DT_ARM_CORTEX_M4F_0_CLOCK_FREQUENCY);
+				DT_PROP(DT_PATH(cpus, cpu_0), clock_frequency));
 #endif
 }
 
@@ -120,13 +125,13 @@ static ALWAYS_INLINE void clock_init(void)
  * @return 0
  */
 
-static int fsl_frdm_k64f_init(struct device *arg)
+static int k6x_init(struct device *arg)
 {
 	ARG_UNUSED(arg);
 
 	unsigned int oldLevel; /* old interrupt lock level */
 #if !defined(CONFIG_ARM_MPU)
-	u32_t temp_reg;
+	uint32_t temp_reg;
 #endif /* !CONFIG_ARM_MPU */
 
 	/* disable interrupts */
@@ -153,7 +158,13 @@ static int fsl_frdm_k64f_init(struct device *arg)
 	SYSMPU->CESR = temp_reg;
 #endif /* !CONFIG_ARM_MPU */
 
-	/* Initialize PLL/system clock to 120 MHz */
+#ifdef CONFIG_K6X_HSRUN
+	/* Switch to HSRUN mode */
+	SMC->PMPROT |= SMC_PMPROT_AHSRUN_MASK;
+	SMC->PMCTRL = (SMC->PMCTRL & ~SMC_PMCTRL_RUNM_MASK) |
+		SMC_PMCTRL_RUNM(RUNM_HSRUN);
+#endif
+	/* Initialize PLL/system clock up to 180 MHz */
 	clock_init();
 
 	/*
@@ -167,4 +178,4 @@ static int fsl_frdm_k64f_init(struct device *arg)
 	return 0;
 }
 
-SYS_INIT(fsl_frdm_k64f_init, PRE_KERNEL_1, 0);
+SYS_INIT(k6x_init, PRE_KERNEL_1, 0);

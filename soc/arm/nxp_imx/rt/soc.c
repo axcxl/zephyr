@@ -78,14 +78,14 @@ const clock_video_pll_config_t videoPllConfig = {
 #ifdef CONFIG_NXP_IMX_RT_BOOT_HEADER
 const __imx_boot_data_section BOOT_DATA_T boot_data = {
 	.start = CONFIG_FLASH_BASE_ADDRESS,
-	.size = CONFIG_FLASH_SIZE,
+	.size = KB(CONFIG_FLASH_SIZE),
 	.plugin = PLUGIN_FLAG,
 	.placeholder = 0xFFFFFFFF,
 };
 
 const __imx_boot_ivt_section ivt image_vector_table = {
 	.hdr = IVT_HEADER,
-	.entry = CONFIG_FLASH_BASE_ADDRESS + CONFIG_TEXT_SECTION_OFFSET,
+	.entry = CONFIG_FLASH_BASE_ADDRESS + CONFIG_ROM_START_OFFSET,
 	.reserved1 = IVT_RSVD,
 #ifdef CONFIG_DEVICE_CONFIGURATION_DATA
 	.dcd = (uint32_t) dcd_data,
@@ -181,9 +181,9 @@ static ALWAYS_INLINE void clock_init(void)
 
 #if CONFIG_USB_DC_NXP_EHCI
 	CLOCK_EnableUsbhs0PhyPllClock(kCLOCK_Usb480M,
-				DT_INST_0_NXP_KINETIS_USBD_CLOCKS_CLOCK_FREQUENCY);
+				DT_PROP_BY_PHANDLE(DT_INST(0, nxp_kinetis_usbd), clocks, clock_frequency));
 	CLOCK_EnableUsbhs0Clock(kCLOCK_Usb480M,
-				DT_INST_0_NXP_KINETIS_USBD_CLOCKS_CLOCK_FREQUENCY);
+				DT_PROP_BY_PHANDLE(DT_INST(0, nxp_kinetis_usbd), clocks, clock_frequency));
 	USB_EhciPhyInit(kUSB_ControllerEhci0, CPU_XTAL_CLK_HZ, &usbPhyConfig);
 #endif
 
@@ -234,8 +234,8 @@ void imxrt_usdhc_pinmux_cb_register(usdhc_pin_cfg_cb cb)
 	g_usdhc_pin_cfg_cb = cb;
 }
 
-void imxrt_usdhc_pinmux(u16_t nusdhc, bool init,
-	u32_t speed, u32_t strength)
+void imxrt_usdhc_pinmux(uint16_t nusdhc, bool init,
+	uint32_t speed, uint32_t strength)
 {
 	if (g_usdhc_pin_cfg_cb)
 		g_usdhc_pin_cfg_cb(nusdhc, init,

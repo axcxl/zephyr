@@ -42,9 +42,9 @@ extern "C" {
  */
 struct sensor_value {
 	/** Integer part of the value. */
-	s32_t val1;
+	int32_t val1;
 	/** Fractional part of the value (in one-millionth parts). */
-	s32_t val2;
+	int32_t val2;
 };
 
 /**
@@ -134,6 +134,46 @@ enum sensor_channel {
 	/** Position change on the Z axis, in points. */
 	SENSOR_CHAN_POS_DZ,
 
+	/** Revolutions per minute, in RPM. */
+	SENSOR_CHAN_RPM,
+
+	/** Voltage, in volts **/
+	SENSOR_CHAN_GAUGE_VOLTAGE,
+	/** Average current, in amps **/
+	SENSOR_CHAN_GAUGE_AVG_CURRENT,
+	/** Standy current, in amps **/
+	SENSOR_CHAN_GAUGE_STDBY_CURRENT,
+	/** Max load current, in amps **/
+	SENSOR_CHAN_GAUGE_MAX_LOAD_CURRENT,
+	/** Gauge temperature  **/
+	SENSOR_CHAN_GAUGE_TEMP,
+	/** State of charge measurement in % **/
+	SENSOR_CHAN_GAUGE_STATE_OF_CHARGE,
+	/** Full Charge Capacity in mAh **/
+	SENSOR_CHAN_GAUGE_FULL_CHARGE_CAPACITY,
+	/** Remaining Charge Capacity in mAh **/
+	SENSOR_CHAN_GAUGE_REMAINING_CHARGE_CAPACITY,
+	/** Nominal Available Capacity in mAh **/
+	SENSOR_CHAN_GAUGE_NOM_AVAIL_CAPACITY,
+	/** Full Available Capacity in mAh **/
+	SENSOR_CHAN_GAUGE_FULL_AVAIL_CAPACITY,
+	/** Average power in mW **/
+	SENSOR_CHAN_GAUGE_AVG_POWER,
+	/** State of health measurement in % **/
+	SENSOR_CHAN_GAUGE_STATE_OF_HEALTH,
+	/** Time to empty in minutes **/
+	SENSOR_CHAN_GAUGE_TIME_TO_EMPTY,
+	/** Time to full in minutes **/
+	SENSOR_CHAN_GAUGE_TIME_TO_FULL,
+	/** Cycle count (total number of charge/discharge cycles) **/
+	SENSOR_CHAN_GAUGE_CYCLE_COUNT,
+	/** Design voltage of cell in V (max voltage)*/
+	SENSOR_CHAN_GAUGE_DESIGN_VOLTAGE,
+	/** Desired voltage of cell in V (nominal voltage) */
+	SENSOR_CHAN_GAUGE_DESIRED_VOLTAGE,
+	/** Desired charging current in mA */
+	SENSOR_CHAN_GAUGE_DESIRED_CHARGING_CURRENT,
+
 	/** All channels. */
 	SENSOR_CHAN_ALL,
 
@@ -189,6 +229,9 @@ enum sensor_trigger_type {
 
 	/** Trigger fires when a double tap is detected. */
 	SENSOR_TRIG_DOUBLE_TAP,
+
+	/** Trigger fires when a free fall is detected. */
+	SENSOR_TRIG_FREEFALL,
 
 	/**
 	 * Number of all common sensor triggers.
@@ -289,6 +332,18 @@ typedef int (*sensor_attr_set_t)(struct device *dev,
 				 enum sensor_channel chan,
 				 enum sensor_attribute attr,
 				 const struct sensor_value *val);
+
+/**
+ * @typedef sensor_attr_get_t
+ * @brief Callback API upon getting a sensor's attributes
+ *
+ * See sensor_attr_get() for argument description
+ */
+typedef int (*sensor_attr_get_t)(struct device *dev,
+				 enum sensor_channel chan,
+				 enum sensor_attribute attr,
+				 struct sensor_value *val);
+
 /**
  * @typedef sensor_trigger_set_t
  * @brief Callback API for setting a sensor's trigger and handler
@@ -316,8 +371,9 @@ typedef int (*sensor_channel_get_t)(struct device *dev,
 				    enum sensor_channel chan,
 				    struct sensor_value *val);
 
-struct sensor_driver_api {
+__subsystem struct sensor_driver_api {
 	sensor_attr_set_t attr_set;
+	sensor_attr_get_t attr_get;
 	sensor_trigger_set_t trigger_set;
 	sensor_sample_fetch_t sample_fetch;
 	sensor_channel_get_t channel_get;
@@ -353,6 +409,38 @@ static inline int z_impl_sensor_attr_set(struct device *dev,
 	}
 
 	return api->attr_set(dev, chan, attr, val);
+}
+
+/**
+ * @brief Get an attribute for a sensor
+ *
+ * @param dev Pointer to the sensor device
+ * @param chan The channel the attribute belongs to, if any.  Some
+ * attributes may only be set for all channels of a device, depending on
+ * device capabilities.
+ * @param attr The attribute to get
+ * @param val Pointer to where to store the attribute
+ *
+ * @return 0 if successful, negative errno code if failure.
+ */
+__syscall int sensor_attr_get(struct device *dev,
+			      enum sensor_channel chan,
+			      enum sensor_attribute attr,
+			      struct sensor_value *val);
+
+static inline int z_impl_sensor_attr_get(struct device *dev,
+					enum sensor_channel chan,
+					enum sensor_attribute attr,
+					struct sensor_value *val)
+{
+	const struct sensor_driver_api *api =
+		(const struct sensor_driver_api *)dev->driver_api;
+
+	if (api->attr_get == NULL) {
+		return -ENOTSUP;
+	}
+
+	return api->attr_get(dev, chan, attr, val);
 }
 
 /**
@@ -496,9 +584,9 @@ static inline int z_impl_sensor_channel_get(struct device *dev,
  *
  * @return The converted value, in Gs.
  */
-static inline s32_t sensor_ms2_to_g(const struct sensor_value *ms2)
+static inline int32_t sensor_ms2_to_g(const struct sensor_value *ms2)
 {
-	s64_t micro_ms2 = ms2->val1 * 1000000LL + ms2->val2;
+	int64_t micro_ms2 = ms2->val1 * 1000000LL + ms2->val2;
 
 	if (micro_ms2 > 0) {
 		return (micro_ms2 + SENSOR_G / 2) / SENSOR_G;
@@ -513,10 +601,10 @@ static inline s32_t sensor_ms2_to_g(const struct sensor_value *ms2)
  * @param g The G value to be converted.
  * @param ms2 A pointer to a sensor_value struct, where the result is stored.
  */
-static inline void sensor_g_to_ms2(s32_t g, struct sensor_value *ms2)
+static inline void sensor_g_to_ms2(int32_t g, struct sensor_value *ms2)
 {
-	ms2->val1 = ((s64_t)g * SENSOR_G) / 1000000LL;
-	ms2->val2 = ((s64_t)g * SENSOR_G) % 1000000LL;
+	ms2->val1 = ((int64_t)g * SENSOR_G) / 1000000LL;
+	ms2->val2 = ((int64_t)g * SENSOR_G) % 1000000LL;
 }
 
 /**
@@ -526,9 +614,9 @@ static inline void sensor_g_to_ms2(s32_t g, struct sensor_value *ms2)
  *
  * @return The converted value, in degrees.
  */
-static inline s32_t sensor_rad_to_degrees(const struct sensor_value *rad)
+static inline int32_t sensor_rad_to_degrees(const struct sensor_value *rad)
 {
-	s64_t micro_rad_s = rad->val1 * 1000000LL + rad->val2;
+	int64_t micro_rad_s = rad->val1 * 1000000LL + rad->val2;
 
 	if (micro_rad_s > 0) {
 		return (micro_rad_s * 180LL + SENSOR_PI / 2) / SENSOR_PI;
@@ -543,10 +631,10 @@ static inline s32_t sensor_rad_to_degrees(const struct sensor_value *rad)
  * @param d The value (in degrees) to be converted.
  * @param rad A pointer to a sensor_value struct, where the result is stored.
  */
-static inline void sensor_degrees_to_rad(s32_t d, struct sensor_value *rad)
+static inline void sensor_degrees_to_rad(int32_t d, struct sensor_value *rad)
 {
-	rad->val1 = ((s64_t)d * SENSOR_PI / 180LL) / 1000000LL;
-	rad->val2 = ((s64_t)d * SENSOR_PI / 180LL) % 1000000LL;
+	rad->val1 = ((int64_t)d * SENSOR_PI / 180LL) / 1000000LL;
+	rad->val2 = ((int64_t)d * SENSOR_PI / 180LL) % 1000000LL;
 }
 
 /**

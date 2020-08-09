@@ -20,7 +20,7 @@ _ASM_FILE_PROLOGUE
 
 GTEXT(z_arm_reset)
 GTEXT(memset)
-GDATA(_interrupt_stack)
+GDATA(z_interrupt_stacks)
 #if defined(CONFIG_PLATFORM_SPECIFIC_INIT)
 GTEXT(z_platform_init)
 #endif
@@ -77,19 +77,27 @@ SECTION_SUBSEC_FUNC(TEXT,_reset_section,__start)
     bl z_arm_watchdog_init
 #endif
 
+/*
+ *
+ * Note: in all Cortex-M variants the interrupt stack area is at
+ * least equal to CONFIG_ISR_STACK_SIZE + MPU_GUARD_ALIGN_AND_SIZE
+ * (may be larger due to rounding up for stack pointer aligning
+ * purposes but this is sufficient during initialization).
+ */
+
 #ifdef CONFIG_INIT_STACKS
-    ldr r0, =_interrupt_stack
+    ldr r0, =z_interrupt_stacks
     ldr r1, =0xaa
-    ldr r2, =CONFIG_ISR_STACK_SIZE
+    ldr r2, =CONFIG_ISR_STACK_SIZE + MPU_GUARD_ALIGN_AND_SIZE
     bl memset
 #endif
 
     /*
      * Set PSP and use it to boot without using MSP, so that it
-     * gets set to _interrupt_stack during initialization.
+     * gets set to z_interrupt_stacks during initialization.
      */
-    ldr r0, =_interrupt_stack
-    ldr r1, =CONFIG_ISR_STACK_SIZE
+    ldr r0, =z_interrupt_stacks
+    ldr r1, =CONFIG_ISR_STACK_SIZE + MPU_GUARD_ALIGN_AND_SIZE
     adds r0, r0, r1
     msr PSP, r0
     mrs r0, CONTROL

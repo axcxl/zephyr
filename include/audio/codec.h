@@ -14,6 +14,14 @@
 #ifndef ZEPHYR_INCLUDE_AUDIO_CODEC_H_
 #define ZEPHYR_INCLUDE_AUDIO_CODEC_H_
 
+/**
+ * @brief Abstraction for audio codecs
+ *
+ * @defgroup audio_codec_interface Audio Codec Interface
+ * @ingroup audio_interface
+ * @{
+ */
+
 #include <drivers/i2s.h>
 
 #ifdef __cplusplus
@@ -89,7 +97,7 @@ typedef union {
  * Codec configuration parameters
  */
 struct audio_codec_cfg {
-	u32_t			mclk_freq;	/* MCLK input frequency in Hz */
+	uint32_t			mclk_freq;	/* MCLK input frequency in Hz */
 	audio_dai_type_t	dai_type;	/* Digital interface type */
 	audio_dai_cfg_t		dai_cfg;	/* DAI configuration info */
 };
@@ -216,5 +224,9 @@ static inline int audio_codec_apply_properties(struct device *dev)
 #ifdef __cplusplus
 }
 #endif
+
+/**
+ * @}
+ */
 
 #endif /* ZEPHYR_INCLUDE_AUDIO_CODEC_H_ */

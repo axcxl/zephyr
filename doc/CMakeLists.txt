@@ -3,6 +3,9 @@
 cmake_minimum_required(VERSION 3.13.1)
 project(Zephyr-Kernel-Doc LANGUAGES)
 
+set(NO_BOILERPLATE TRUE)
+find_package(Zephyr REQUIRED HINTS $ENV{ZEPHYR_BASE} ..)
+
 # Find west to (optionally) process modules for Kconfig
 find_program(
   WEST
@@ -12,7 +15,7 @@ if(${WEST} STREQUAL WEST-NOTFOUND)
   unset(WEST)
 endif()
 
-file(TO_CMAKE_PATH "$ENV{ZEPHYR_BASE}" ZEPHYR_BASE)
+file(TO_CMAKE_PATH "${ZEPHYR_BASE}" ZEPHYR_BASE)
 
 message(STATUS "Zephyr base: ${ZEPHYR_BASE}")
 if(DEFINED WEST)
@@ -23,7 +26,7 @@ else()
   message(STATUS "West: not found")
 endif()
 
-find_package(PythonInterp 3.4)
+include(${ZEPHYR_BASE}/cmake/python.cmake)
 set(DOXYGEN_SKIP_DOT True)
 find_package(Doxygen REQUIRED)
 find_package(LATEX)
@@ -39,6 +42,8 @@ endif()
 # Include version info
 include(${ZEPHYR_BASE}/cmake/version.cmake)
 # Process modules
+set(KCONFIG_BINARY_DIR ${CMAKE_BINARY_DIR}/Kconfig)
+file(MAKE_DIRECTORY ${KCONFIG_BINARY_DIR})
 include(${ZEPHYR_BASE}/cmake/zephyr_module.cmake)
 
 # Note that this won't force fatal error if latexmk is not found.
@@ -192,6 +197,17 @@ else()
   set(SEP :)
 endif()
 
+file(WRITE ${KCONFIG_BINARY_DIR}/Kconfig.soc.defconfig
+     "osource \"${ZEPHYR_BASE}/soc/$(ARCH)/*/Kconfig.defconfig\"\n"
+)
+file(WRITE ${KCONFIG_BINARY_DIR}/Kconfig.soc
+     "osource \"${ZEPHYR_BASE}/soc/$(ARCH)/*/Kconfig.soc\"\n"
+)
+file(WRITE ${KCONFIG_BINARY_DIR}/Kconfig.soc.arch
+     "osource \"${ZEPHYR_BASE}/soc/$(ARCH)/Kconfig\"\n"
+     "osource \"${ZEPHYR_BASE}/soc/$(ARCH)/*/Kconfig\"\n"
+)
+
 add_custom_target(
   kconfig
   COMMAND ${CMAKE_COMMAND} -E make_directory ${RST_OUT}/doc/reference/kconfig
@@ -203,7 +219,7 @@ add_custom_target(
   ARCH=*
   ARCH_DIR=arch
   SOC_DIR=soc
-  CMAKE_BINARY_DIR=${CMAKE_BINARY_DIR}
+  KCONFIG_BINARY_DIR=${KCONFIG_BINARY_DIR}
   KCONFIG_WARN_UNDEF=y
   KCONFIG_TURBO_MODE=${KCONFIG_TURBO_MODE}
   KCONFIG_DOC_MODE=1
@@ -343,6 +359,12 @@ add_custom_target(
   htmldocs
 )
 add_dependencies(htmldocs html)
+
+
+add_custom_target(
+  doxygen
+)
+add_dependencies(doxygen doxy_real_modified_times)
 
 add_dependencies(latex content doxy_real_modified_times kconfig)
 

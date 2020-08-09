@@ -10,6 +10,7 @@ User and Developer Guides
    beyond-GSG.rst
    bluetooth/index.rst
    build/index
+   coding_guidelines/index
    c_library
    ../README.rst
    documentation/index
@@ -25,9 +26,11 @@ User and Developer Guides
    kconfig/index
    modules.rst
    networking/index
+   platformio/index.rst
    portability/index.rst
    porting/index
    test/index
    tracing/index
    west/index
    optimizations/index
+   zephyr_cmake_package.rst

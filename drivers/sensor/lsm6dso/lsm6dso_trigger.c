@@ -8,6 +8,8 @@
  * https://www.st.com/resource/en/datasheet/lsm6dso.pdf
  */
 
+#define DT_DRV_COMPAT st_lsm6dso
+
 #include <kernel.h>
 #include <drivers/sensor.h>
 #include <drivers/gpio.h>
@@ -23,7 +25,7 @@ LOG_MODULE_DECLARE(LSM6DSO, CONFIG_SENSOR_LOG_LEVEL);
  */
 static int lsm6dso_enable_t_int(struct device *dev, int enable)
 {
-	const struct lsm6dso_config *cfg = dev->config->config_info;
+	const struct lsm6dso_config *cfg = dev->config_info;
 	struct lsm6dso_data *lsm6dso = dev->driver_data;
 	lsm6dso_pin_int2_route_t int2_route;
 
@@ -51,7 +53,7 @@ static int lsm6dso_enable_t_int(struct device *dev, int enable)
  */
 static int lsm6dso_enable_xl_int(struct device *dev, int enable)
 {
-	const struct lsm6dso_config *cfg = dev->config->config_info;
+	const struct lsm6dso_config *cfg = dev->config_info;
 	struct lsm6dso_data *lsm6dso = dev->driver_data;
 
 	if (enable) {
@@ -87,7 +89,7 @@ static int lsm6dso_enable_xl_int(struct device *dev, int enable)
  */
 static int lsm6dso_enable_g_int(struct device *dev, int enable)
 {
-	const struct lsm6dso_config *cfg = dev->config->config_info;
+	const struct lsm6dso_config *cfg = dev->config_info;
 	struct lsm6dso_data *lsm6dso = dev->driver_data;
 
 	if (enable) {
@@ -166,7 +168,7 @@ static void lsm6dso_handle_interrupt(void *arg)
 	struct sensor_trigger drdy_trigger = {
 		.type = SENSOR_TRIG_DATA_READY,
 	};
-	const struct lsm6dso_config *cfg = dev->config->config_info;
+	const struct lsm6dso_config *cfg = dev->config_info;
 	lsm6dso_status_reg_t status;
 
 	while (1) {
@@ -203,11 +205,11 @@ static void lsm6dso_handle_interrupt(void *arg)
 }
 
 static void lsm6dso_gpio_callback(struct device *dev,
-				    struct gpio_callback *cb, u32_t pins)
+				    struct gpio_callback *cb, uint32_t pins)
 {
 	struct lsm6dso_data *lsm6dso =
 		CONTAINER_OF(cb, struct lsm6dso_data, gpio_cb);
-	const struct lsm6dso_config *cfg = dev->config->config_info;
+	const struct lsm6dso_config *cfg = lsm6dso->dev->config_info;
 
 	ARG_UNUSED(pins);
 
@@ -249,7 +251,7 @@ static void lsm6dso_work_cb(struct k_work *work)
 int lsm6dso_init_interrupt(struct device *dev)
 {
 	struct lsm6dso_data *lsm6dso = dev->driver_data;
-	const struct lsm6dso_config *cfg = dev->config->config_info;
+	const struct lsm6dso_config *cfg = dev->config_info;
 	int ret;
 
 	/* setup data ready gpio interrupt (INT1 or INT2) */
@@ -259,6 +261,7 @@ int lsm6dso_init_interrupt(struct device *dev)
 			    cfg->int_gpio_port);
 		return -EINVAL;
 	}
+	lsm6dso->dev = dev;
 
 #if defined(CONFIG_LSM6DSO_TRIGGER_OWN_THREAD)
 	k_sem_init(&lsm6dso->gpio_sem, 0, UINT_MAX);
@@ -270,7 +273,6 @@ int lsm6dso_init_interrupt(struct device *dev)
 			0, K_NO_WAIT);
 #elif defined(CONFIG_LSM6DSO_TRIGGER_GLOBAL_THREAD)
 	lsm6dso->work.handler = lsm6dso_work_cb;
-	lsm6dso->dev = dev;
 #endif /* CONFIG_LSM6DSO_TRIGGER_OWN_THREAD */
 
 	ret = gpio_pin_configure(lsm6dso->gpio, cfg->int_gpio_pin,

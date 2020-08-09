@@ -41,7 +41,7 @@ extern "C" {
 struct k_thread;
 struct k_mem_domain;
 
-typedef struct _k_thread_stack_element k_thread_stack_t;
+typedef struct z_thread_stack_element k_thread_stack_t;
 
 typedef void (*k_thread_entry_t)(void *p1, void *p2, void *p3);
 
@@ -56,7 +56,7 @@ typedef void (*k_thread_entry_t)(void *p1, void *p2, void *p3);
  *
  * @see k_cycle_get_32()
  */
-static inline u32_t arch_k_cycle_get_32(void);
+static inline uint32_t arch_k_cycle_get_32(void);
 
 /** @} */
 
@@ -67,49 +67,73 @@ static inline u32_t arch_k_cycle_get_32(void);
  */
 
 /**
- * @def ARCH_THREAD_STACK_DEFINE(sym, size)
- *
- * @see K_THREAD_STACK_DEFINE()
- */
-
-/**
- * @def ARCH_THREAD_STACK_ARRAY_DEFINE(sym, size)
- *
- * @see K_THREAD_STACK_ARRAY_DEFINE()
- */
-
-/**
- * @def ARCH_THREAD_STACK_LEN(size)
- *
- * @see K_THREAD_STACK_LEN()
- */
-
-/**
- * @def ARCH_THREAD_STACK_MEMBER(sym, size)
- *
- * @see K_THREAD_STACK_MEMBER()
- */
-
-/*
- * @def ARCH_THREAD_STACK_SIZEOF(sym)
- *
- * @see K_THREAD_STACK_SIZEOF()
- */
-
-/**
  * @def ARCH_THREAD_STACK_RESERVED
  *
  * @see K_THREAD_STACK_RESERVED
  */
 
 /**
- * @def ARCH_THREAD_STACK_BUFFER(sym)
+ * @def ARCH_STACK_PTR_ALIGN
  *
- * @see K_THREAD_STACK_RESERVED
+ * Required alignment of the CPU's stack pointer register value, dictated by
+ * hardware constraints and the ABI calling convention.
+ *
+ * @see Z_STACK_PTR_ALIGN
+ */
+
+/**
+ * @def ARCH_THREAD_STACK_OBJ_ALIGN(size)
+ *
+ * Required alignment of the lowest address of a stack object.
+ *
+ * Optional definition.
+ *
+ * @see Z_THREAD_STACK_OBJ_ALIGN
+ */
+
+/**
+ * @def ARCH_THREAD_STACK_SIZE_ADJUST(size)
+ * @brief Round up a stack buffer size to alignment constraints
+ *
+ * Adjust a requested stack buffer size to the true size of its underlying
+ * buffer, defined as the area usable for thread stack context and thread-
+ * local storage.
+ *
+ * The size value passed here does not include storage reserved for platform
+ * data.
+ *
+ * The returned value is either the same size provided (if already properly
+ * aligned), or rounded up to satisfy alignment constraints.  Calculations
+ * performed here *must* be idempotent.
+ *
+ * Optional definition. If undefined, stack buffer sizes are either:
+ * - Rounded up to the next power of two if user mode is enabled on an arch
+ *   with an MPU that requires such alignment
+ * - Rounded up to ARCH_STACK_PTR_ALIGN
+ *
+ * @see Z_THREAD_STACK_SIZE_ADJUST
+ */
+
+/**
+ * @def ARCH_KERNEL_STACK_RESERVED
+ * @brief MPU guard size for kernel-only stacks
+ *
+ * If MPU stack guards are used to catch stack overflows, specify the
+ * amount of space reserved in kernel stack objects. If guard sizes are
+ * context dependent, this should be in the minimum guard size, with
+ * remaining space carved out if needed.
+ *
+ * Optional definition, defaults to 0.
+ *
+ * @see K_KERNEL_STACK_RESERVED
+ */
+
+/**
+ * @def ARCH_KERNEL_STACK_OBJ_ALIGN
+ * @brief Required alignment of the lowest address of a kernel-only stack.
  */
 
 /** @} */
-
 
 /**
  * @addtogroup arch-pm
@@ -126,6 +150,10 @@ static inline u32_t arch_k_cycle_get_32(void);
  * Architectures that do not implement power management instructions may
  * immediately return, otherwise a power-saving instruction should be
  * issued to wait for an interrupt.
+ *
+ * @note The function is expected to return after the interrupt that has
+ * caused the CPU to exit power-saving mode has been serviced, although
+ * this is not a firm requirement.
  *
  * @see k_cpu_idle()
  */
@@ -253,7 +281,7 @@ int arch_irq_is_enabled(unsigned int irq);
  */
 int arch_irq_connect_dynamic(unsigned int irq, unsigned int priority,
 			     void (*routine)(void *parameter),
-			     void *parameter, u32_t flags);
+			     void *parameter, uint32_t flags);
 
 /**
  * @def ARCH_IRQ_CONNECT(irq, pri, isr, arg, flags)
@@ -532,7 +560,7 @@ void arch_mem_domain_thread_remove(struct k_thread *thread);
  * @param partition_id The partition index that needs to be deleted
  */
 void arch_mem_domain_partition_remove(struct k_mem_domain *domain,
-				      u32_t partition_id);
+				      uint32_t partition_id);
 
 /**
  * @brief Add a partition to the memory domain
@@ -544,7 +572,7 @@ void arch_mem_domain_partition_remove(struct k_mem_domain *domain,
  * @param partition_id The partition that needs to be added
  */
 void arch_mem_domain_partition_add(struct k_mem_domain *domain,
-				   u32_t partition_id);
+				   uint32_t partition_id);
 
 /**
  * @brief Remove the memory domain
@@ -577,6 +605,8 @@ void arch_mem_domain_destroy(struct k_mem_domain *domain);
  * In some architectures the validation will always return failure
  * if the supplied memory buffer spans multiple enabled memory management
  * regions (even if all such regions permit user access).
+ *
+ * @warning 0 size buffer has undefined behavior.
  *
  * @param addr start address of the buffer
  * @param size the size of the buffer
@@ -648,18 +678,53 @@ size_t arch_user_string_nlen(const char *s, size_t maxsize, int *err);
  */
 
 #ifdef CONFIG_EXECUTION_BENCHMARKING
-extern u64_t arch_timing_swap_start;
-extern u64_t arch_timing_swap_end;
-extern u64_t arch_timing_irq_start;
-extern u64_t arch_timing_irq_end;
-extern u64_t arch_timing_tick_start;
-extern u64_t arch_timing_tick_end;
-extern u64_t arch_timing_user_mode_end;
-extern u32_t arch_timing_value_swap_end;
-extern u64_t arch_timing_value_swap_common;
-extern u64_t arch_timing_value_swap_temp;
+extern uint64_t arch_timing_swap_start;
+extern uint64_t arch_timing_swap_end;
+extern uint64_t arch_timing_irq_start;
+extern uint64_t arch_timing_irq_end;
+extern uint64_t arch_timing_tick_start;
+extern uint64_t arch_timing_tick_end;
+extern uint64_t arch_timing_user_mode_end;
+extern uint32_t arch_timing_value_swap_end;
+extern uint64_t arch_timing_value_swap_common;
+extern uint64_t arch_timing_value_swap_temp;
 #endif /* CONFIG_EXECUTION_BENCHMARKING */
 
+/** @} */
+
+/**
+ * @defgroup arch_cache Architecture-specific cache functions
+ * @ingroup arch-interface
+ * @{
+ */
+
+#ifdef CONFIG_CACHE_FLUSHING
+/**
+ *
+ * @brief Flush d-cache lines to main memory
+ *
+ * @see sys_cache_flush
+ */
+void arch_dcache_flush(void *addr, size_t size);
+
+/**
+ *
+ * @brief Invalidate d-cache lines
+ *
+ * @see sys_cache_invd
+ */
+void arch_dcache_invd(void *addr, size_t size);
+
+#ifndef CONFIG_CACHE_LINE_SIZE
+/**
+ *
+ * @brief Get d-cache line size
+ *
+ * @see sys_cache_line_size_get
+ */
+size_t arch_cache_line_size_get(void);
+#endif
+#endif
 /** @} */
 
 #ifdef __cplusplus

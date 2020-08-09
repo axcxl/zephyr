@@ -18,9 +18,8 @@
 #include <arch/cpu.h>
 #if defined(CONFIG_CPU_CORTEX_M)
 #include <arch/arm/aarch32/cortex_m/cmsis.h>
-#elif defined(CONFIG_CPU_CORTEX_R)
-#include <device.h>
-#include <irq_nextlevel.h>
+#elif defined(CONFIG_CPU_CORTEX_A) || defined(CONFIG_CPU_CORTEX_R)
+#include <drivers/interrupt_controller/gic.h>
 #endif
 #include <sys/__assert.h>
 #include <toolchain.h>
@@ -62,7 +61,7 @@ int arch_irq_is_enabled(unsigned int irq)
  *
  * @return N/A
  */
-void z_arm_irq_priority_set(unsigned int irq, unsigned int prio, u32_t flags)
+void z_arm_irq_priority_set(unsigned int irq, unsigned int prio, uint32_t flags)
 {
 	/* The kernel may reserve some of the highest priority levels.
 	 * So we offset the requested priority level with the number
@@ -89,33 +88,39 @@ void z_arm_irq_priority_set(unsigned int irq, unsigned int prio, u32_t flags)
 	 * affecting performance (can still be useful on systems with a
 	 * reduced set of priorities, like Cortex-M0/M0+).
 	 */
-	__ASSERT(prio <= (BIT(DT_NUM_IRQ_PRIO_BITS) - 1),
+	__ASSERT(prio <= (BIT(NUM_IRQ_PRIO_BITS) - 1),
 		 "invalid priority %d! values must be less than %lu\n",
 		 prio - _IRQ_PRIO_OFFSET,
-		 BIT(DT_NUM_IRQ_PRIO_BITS) - (_IRQ_PRIO_OFFSET));
+		 BIT(NUM_IRQ_PRIO_BITS) - (_IRQ_PRIO_OFFSET));
 	NVIC_SetPriority((IRQn_Type)irq, prio);
 }
 
-#elif defined(CONFIG_CPU_CORTEX_R)
+#elif defined(CONFIG_CPU_CORTEX_A) || defined(CONFIG_CPU_CORTEX_R)
+/*
+ * For Cortex-A and Cortex-R cores, the default interrupt controller is the ARM
+ * Generic Interrupt Controller (GIC) and therefore the architecture interrupt
+ * control functions are mapped to the GIC driver interface.
+ *
+ * When a custom interrupt controller is used (i.e.
+ * CONFIG_ARM_CUSTOM_INTERRUPT_CONTROLLER is enabled), the architecture
+ * interrupt control functions are mapped to the SoC layer in
+ * `include/arch/arm/aarch32/irq.h`.
+ */
+
+#if !defined(CONFIG_ARM_CUSTOM_INTERRUPT_CONTROLLER)
 void arch_irq_enable(unsigned int irq)
 {
-	struct device *dev = _sw_isr_table[0].arg;
-
-	irq_enable_next_level(dev, (irq >> 8) - 1);
+	arm_gic_irq_enable(irq);
 }
 
 void arch_irq_disable(unsigned int irq)
 {
-	struct device *dev = _sw_isr_table[0].arg;
-
-	irq_disable_next_level(dev, (irq >> 8) - 1);
+	arm_gic_irq_disable(irq);
 }
 
 int arch_irq_is_enabled(unsigned int irq)
 {
-	struct device *dev = _sw_isr_table[0].arg;
-
-	return irq_is_enabled_next_level(dev);
+	return arm_gic_irq_is_enabled(irq);
 }
 
 /**
@@ -130,33 +135,30 @@ int arch_irq_is_enabled(unsigned int irq)
  *
  * @return N/A
  */
-void z_arm_irq_priority_set(unsigned int irq, unsigned int prio, u32_t flags)
+void z_arm_irq_priority_set(unsigned int irq, unsigned int prio, uint32_t flags)
 {
-	struct device *dev = _sw_isr_table[0].arg;
-
-	if (irq == 0)
-		return;
-
-	irq_set_priority_next_level(dev, (irq >> 8) - 1, prio, flags);
+	arm_gic_irq_set_priority(irq, prio, flags);
 }
+#endif /* !CONFIG_ARM_CUSTOM_INTERRUPT_CONTROLLER */
 
-#endif
+#endif /* CONFIG_CPU_CORTEX_M */
+
+void z_arm_fatal_error(unsigned int reason, const z_arch_esf_t *esf);
 
 /**
  *
  * @brief Spurious interrupt handler
  *
- * Installed in all dynamic interrupt slots at boot time. Throws an error if
+ * Installed in all _sw_isr_table slots at boot time. Throws an error if
  * called.
- *
- * See z_arm_reserved().
  *
  * @return N/A
  */
 void z_irq_spurious(void *unused)
 {
 	ARG_UNUSED(unused);
-	z_arm_reserved();
+
+	z_arm_fatal_error(K_ERR_SPURIOUS_IRQ, NULL);
 }
 
 #ifdef CONFIG_SYS_POWER_MANAGEMENT
@@ -179,7 +181,7 @@ void _arch_isr_direct_pm(void)
 #endif /* CONFIG_ARMV6_M_ARMV8_M_BASELINE */
 
 	if (_kernel.idle) {
-		s32_t idle_val = _kernel.idle;
+		int32_t idle_val = _kernel.idle;
 
 		_kernel.idle = 0;
 		z_sys_power_save_idle_exit(idle_val);
@@ -256,7 +258,7 @@ int irq_target_state_is_secure(unsigned int irq)
 #ifdef CONFIG_DYNAMIC_INTERRUPTS
 int arch_irq_connect_dynamic(unsigned int irq, unsigned int priority,
 			     void (*routine)(void *parameter), void *parameter,
-			     u32_t flags)
+			     uint32_t flags)
 {
 	z_isr_install(irq, routine, parameter);
 	z_arm_irq_priority_set(irq, priority, flags);
@@ -266,7 +268,7 @@ int arch_irq_connect_dynamic(unsigned int irq, unsigned int priority,
 #ifdef CONFIG_DYNAMIC_DIRECT_INTERRUPTS
 static inline void z_arm_irq_dynamic_direct_isr_dispatch(void)
 {
-	u32_t irq = __get_IPSR() - 16;
+	uint32_t irq = __get_IPSR() - 16;
 
 	if (irq < IRQ_TABLE_SIZE) {
 		struct _isr_table_entry *isr_entry = &_sw_isr_table[irq];

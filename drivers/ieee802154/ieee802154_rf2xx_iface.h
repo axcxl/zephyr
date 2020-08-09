@@ -1,7 +1,7 @@
 /* ieee802154_rf2xx_iface.h - ATMEL RF2XX transceiver interface */
 
 /*
- * Copyright (c) 2019 Gerson Fernando Budke
+ * Copyright (c) 2019-2020 Gerson Fernando Budke
  *
  * SPDX-License-Identifier: Apache-2.0
  */
@@ -34,8 +34,8 @@ void rf2xx_iface_phy_tx_start(struct device *dev);
  *
  * @return value of the register read
  */
-u8_t rf2xx_iface_reg_read(struct device *dev,
-			  u8_t addr);
+uint8_t rf2xx_iface_reg_read(struct device *dev,
+			  uint8_t addr);
 
 /**
  * @brief Writes data into a transceiver register
@@ -48,8 +48,8 @@ u8_t rf2xx_iface_reg_read(struct device *dev,
  *
  */
 void rf2xx_iface_reg_write(struct device *dev,
-			   u8_t addr,
-			   u8_t data);
+			   uint8_t addr,
+			   uint8_t data);
 
 /**
  * @brief Subregister read
@@ -61,10 +61,10 @@ void rf2xx_iface_reg_write(struct device *dev,
  *
  * @return  value of the read bit(s)
  */
-u8_t rf2xx_iface_bit_read(struct device *dev,
-			  u8_t addr,
-			  u8_t mask,
-			  u8_t pos);
+uint8_t rf2xx_iface_bit_read(struct device *dev,
+			  uint8_t addr,
+			  uint8_t mask,
+			  uint8_t pos);
 
 /**
  * @brief Subregister write
@@ -76,10 +76,10 @@ u8_t rf2xx_iface_bit_read(struct device *dev,
  * @param[out]  new_value Data, which is muxed into the register
  */
 void rf2xx_iface_bit_write(struct device *dev,
-			   u8_t reg_addr,
-			   u8_t mask,
-			   u8_t pos,
-			   u8_t new_value);
+			   uint8_t reg_addr,
+			   uint8_t mask,
+			   uint8_t pos,
+			   uint8_t new_value);
 
 /**
  * @brief Reads frame buffer of the transceiver
@@ -91,8 +91,8 @@ void rf2xx_iface_bit_write(struct device *dev,
  * @param[in]   length  Number of bytes to be read from the frame
  */
 void rf2xx_iface_frame_read(struct device *dev,
-			    u8_t *data,
-			    u8_t length);
+			    uint8_t *data,
+			    uint8_t length);
 
 /**
  * @brief Writes data into frame buffer of the transceiver
@@ -104,7 +104,22 @@ void rf2xx_iface_frame_read(struct device *dev,
  * @param[in] length Number of bytes to be written into frame buffer
  */
 void rf2xx_iface_frame_write(struct device *dev,
-			     u8_t *data,
-			     u8_t length);
+			     uint8_t *data,
+			     uint8_t length);
+
+/**
+ * @brief Reads sram data from the transceiver
+ *
+ * This function reads the sram data of the transceiver.
+ *
+ * @param[in]   dev     Transceiver device instance
+ * @param[in]   address Start address to be read
+ * @param[out]  data    Pointer to the location to store data
+ * @param[in]   length  Number of bytes to be read from the sram space
+ */
+void rf2xx_iface_sram_read(struct device *dev,
+			    uint8_t address,
+			    uint8_t *data,
+			    uint8_t length);
 
 #endif /* ZEPHYR_DRIVERS_IEEE802154_IEEE802154_RF2XX_IFACE_H_ */

@@ -9,6 +9,8 @@
 #define ZEPHYR_ARCH_ARM_CORE_AARCH32_CORTEX_M_MPU_ARM_MPU_V7_INTERNAL_H_
 
 
+#include <sys/math_extras.h>
+
 #define LOG_LEVEL CONFIG_MPU_LOG_LEVEL
 #include <logging/log.h>
 
@@ -23,7 +25,7 @@ static void mpu_init(void)
  * Note:
  *   The caller must provide a valid region index.
  */
-static void region_init(const u32_t index,
+static void region_init(const uint32_t index,
 	const struct arm_mpu_region *region_conf)
 {
 	/* Select the region you want to access */
@@ -69,7 +71,7 @@ static int mpu_partition_is_valid(const struct k_mem_partition *part)
  * power-of-two value, and the returned SIZE field value corresponds
  * to that power-of-two value.
  */
-static inline u32_t size_to_mpu_rasr_size(u32_t size)
+static inline uint32_t size_to_mpu_rasr_size(uint32_t size)
 {
 	/* The minimal supported region size is 32 bytes */
 	if (size <= 32U) {
@@ -96,7 +98,7 @@ static inline u32_t size_to_mpu_rasr_size(u32_t size)
  */
 static inline void get_region_attr_from_k_mem_partition_info(
 	arm_mpu_region_attr_t *p_attr,
-	const k_mem_partition_attr_t *attr, u32_t base, u32_t size)
+	const k_mem_partition_attr_t *attr, uint32_t base, uint32_t size)
 {
 	/* in ARMv7-M MPU the base address is not required
 	 * to determine region attributes
@@ -124,21 +126,21 @@ static inline int get_dyn_region_min_index(void)
  * This internal function converts the SIZE field value of MPU_RASR
  * to the region size (in bytes).
  */
-static inline u32_t mpu_rasr_size_to_size(u32_t rasr_size)
+static inline uint32_t mpu_rasr_size_to_size(uint32_t rasr_size)
 {
 	return 1 << (rasr_size + 1);
 }
 
-static inline u32_t mpu_region_get_base(u32_t index)
+static inline uint32_t mpu_region_get_base(uint32_t index)
 {
 	MPU->RNR = index;
 	return MPU->RBAR & MPU_RBAR_ADDR_Msk;
 }
 
-static inline u32_t mpu_region_get_size(u32_t index)
+static inline uint32_t mpu_region_get_size(uint32_t index)
 {
 	MPU->RNR = index;
-	u32_t rasr_size = (MPU->RASR & MPU_RASR_SIZE_Msk) >> MPU_RASR_SIZE_Pos;
+	uint32_t rasr_size = (MPU->RASR & MPU_RASR_SIZE_Msk) >> MPU_RASR_SIZE_Pos;
 
 	return mpu_rasr_size_to_size(rasr_size);
 }
@@ -149,10 +151,18 @@ static inline u32_t mpu_region_get_size(u32_t index)
  * Note:
  *   The caller must provide a valid region number.
  */
-static inline int is_enabled_region(u32_t index)
+static inline int is_enabled_region(uint32_t index)
 {
+	/* Lock IRQs to ensure RNR value is correct when reading RASR. */
+	unsigned int key;
+	uint32_t rasr;
+
+	key = irq_lock();
 	MPU->RNR = index;
-	return (MPU->RASR & MPU_RASR_ENABLE_Msk) ? 1 : 0;
+	rasr = MPU->RASR;
+	irq_unlock(key);
+
+	return (rasr & MPU_RASR_ENABLE_Msk) ? 1 : 0;
 }
 
 /* Only a single bit is set for all user accessible permissions.
@@ -167,10 +177,18 @@ static inline int is_enabled_region(u32_t index)
  * Note:
  *   The caller must provide a valid region number.
  */
-static inline u32_t get_region_ap(u32_t r_index)
+static inline uint32_t get_region_ap(uint32_t r_index)
 {
+	/* Lock IRQs to ensure RNR value is correct when reading RASR. */
+	unsigned int key;
+	uint32_t rasr;
+
+	key = irq_lock();
 	MPU->RNR = r_index;
-	return (MPU->RASR & MPU_RASR_AP_Msk) >> MPU_RASR_AP_Pos;
+	rasr = MPU->RASR;
+	irq_unlock(key);
+
+	return (rasr & MPU_RASR_AP_Msk) >> MPU_RASR_AP_Pos;
 }
 
 /**
@@ -179,19 +197,34 @@ static inline u32_t get_region_ap(u32_t r_index)
  * Note:
  *   The caller must provide a valid region number.
  */
-static inline int is_in_region(u32_t r_index, u32_t start, u32_t size)
+static inline int is_in_region(uint32_t r_index, uint32_t start, uint32_t size)
 {
-	u32_t r_addr_start;
-	u32_t r_size_lshift;
-	u32_t r_addr_end;
+	uint32_t r_addr_start;
+	uint32_t r_size_lshift;
+	uint32_t r_addr_end;
+	uint32_t end;
 
+	/* Lock IRQs to ensure RNR value is correct when reading RBAR, RASR. */
+	unsigned int key;
+	uint32_t rbar, rasr;
+
+	key = irq_lock();
 	MPU->RNR = r_index;
-	r_addr_start = MPU->RBAR & MPU_RBAR_ADDR_Msk;
-	r_size_lshift = ((MPU->RASR & MPU_RASR_SIZE_Msk) >>
+	rbar = MPU->RBAR;
+	rasr = MPU->RASR;
+	irq_unlock(key);
+
+	r_addr_start = rbar & MPU_RBAR_ADDR_Msk;
+	r_size_lshift = ((rasr & MPU_RASR_SIZE_Msk) >>
 			MPU_RASR_SIZE_Pos) + 1;
 	r_addr_end = r_addr_start + (1UL << r_size_lshift) - 1;
 
-	if (start >= r_addr_start && (start + size - 1) <= r_addr_end) {
+	size = size == 0 ? 0 : size - 1;
+	if (u32_add_overflow(start, size, &end)) {
+		return 0;
+	}
+
+	if ((start >= r_addr_start) && (end <= r_addr_end)) {
 		return 1;
 	}
 
@@ -204,9 +237,9 @@ static inline int is_in_region(u32_t r_index, u32_t start, u32_t size)
  * Note:
  *   The caller must provide a valid region number.
  */
-static inline int is_user_accessible_region(u32_t r_index, int write)
+static inline int is_user_accessible_region(uint32_t r_index, int write)
 {
-	u32_t r_ap = get_region_ap(r_index);
+	uint32_t r_ap = get_region_ap(r_index);
 
 
 	if (write) {
@@ -222,12 +255,12 @@ static inline int is_user_accessible_region(u32_t r_index, int write)
  */
 static inline int mpu_buffer_validate(void *addr, size_t size, int write)
 {
-	s32_t r_index;
+	int32_t r_index;
 
 	/* Iterate all mpu regions in reversed order */
 	for (r_index = get_num_regions() - 1; r_index >= 0;  r_index--) {
 		if (!is_enabled_region(r_index) ||
-		    !is_in_region(r_index, (u32_t)addr, size)) {
+		    !is_in_region(r_index, (uint32_t)addr, size)) {
 			continue;
 		}
 
@@ -249,11 +282,11 @@ static inline int mpu_buffer_validate(void *addr, size_t size, int write)
 
 #endif /* CONFIG_USERSPACE */
 
-static int mpu_configure_region(const u8_t index,
+static int mpu_configure_region(const uint8_t index,
 	const struct k_mem_partition *new_region);
 
 static int mpu_configure_regions(const struct k_mem_partition
-	*regions[], u8_t regions_num, u8_t start_reg_index,
+	*regions[], uint8_t regions_num, uint8_t start_reg_index,
 	bool do_sanity_check);
 
 /* This internal function programs the static MPU regions.
@@ -265,9 +298,9 @@ static int mpu_configure_regions(const struct k_mem_partition
  * performed, the error signal is propagated to the caller of the function.
  */
 static int mpu_configure_static_mpu_regions(const struct k_mem_partition
-	*static_regions[], const u8_t regions_num,
-	const u32_t background_area_base,
-	const u32_t background_area_end)
+	*static_regions[], const uint8_t regions_num,
+	const uint32_t background_area_base,
+	const uint32_t background_area_end)
 {
 	int mpu_reg_index = static_regions_num;
 
@@ -294,7 +327,7 @@ static int mpu_configure_static_mpu_regions(const struct k_mem_partition
  * performed, the error signal is propagated to the caller of the function.
  */
 static int mpu_configure_dynamic_mpu_regions(const struct k_mem_partition
-	*dynamic_regions[], u8_t regions_num)
+	*dynamic_regions[], uint8_t regions_num)
 {
 	int mpu_reg_index = static_regions_num;
 

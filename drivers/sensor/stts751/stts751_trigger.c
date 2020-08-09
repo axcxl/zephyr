@@ -8,6 +8,8 @@
  * https://www.st.com/resource/en/datasheet/stts751.pdf
  */
 
+#define DT_DRV_COMPAT st_stts751
+
 #include <kernel.h>
 #include <drivers/sensor.h>
 #include <drivers/gpio.h>
@@ -23,7 +25,7 @@ LOG_MODULE_DECLARE(STTS751, CONFIG_SENSOR_LOG_LEVEL);
 static int stts751_enable_int(struct device *dev, int enable)
 {
 	struct stts751_data *stts751 = dev->driver_data;
-	u8_t en = (enable) ? 0 : 1;
+	uint8_t en = (enable) ? 0 : 1;
 
 	return stts751_pin_event_route_set(stts751->ctx, en);
 }
@@ -57,7 +59,7 @@ static void stts751_handle_interrupt(void *arg)
 {
 	struct device *dev = arg;
 	struct stts751_data *stts751 = dev->driver_data;
-	const struct stts751_config *cfg = dev->config->config_info;
+	const struct stts751_config *cfg = dev->config_info;
 	struct sensor_trigger thsld_trigger = {
 		.type = SENSOR_TRIG_THRESHOLD,
 	};
@@ -75,11 +77,11 @@ static void stts751_handle_interrupt(void *arg)
 }
 
 static void stts751_gpio_callback(struct device *dev,
-				  struct gpio_callback *cb, u32_t pins)
+				  struct gpio_callback *cb, uint32_t pins)
 {
-	const struct stts751_config *cfg = dev->config->config_info;
 	struct stts751_data *stts751 =
 		CONTAINER_OF(cb, struct stts751_data, gpio_cb);
+	const struct stts751_config *cfg = stts751->dev->config_info;
 
 	ARG_UNUSED(pins);
 
@@ -120,7 +122,7 @@ static void stts751_work_cb(struct k_work *work)
 int stts751_init_interrupt(struct device *dev)
 {
 	struct stts751_data *stts751 = dev->driver_data;
-	const struct stts751_config *cfg = dev->config->config_info;
+	const struct stts751_config *cfg = dev->config_info;
 	int ret;
 
 	/* setup data ready gpio interrupt */
@@ -129,6 +131,7 @@ int stts751_init_interrupt(struct device *dev)
 		LOG_DBG("Cannot get pointer to %s device", cfg->event_port);
 		return -EINVAL;
 	}
+	stts751->dev = dev;
 
 #if defined(CONFIG_STTS751_TRIGGER_OWN_THREAD)
 	k_sem_init(&stts751->gpio_sem, 0, UINT_MAX);
@@ -140,7 +143,6 @@ int stts751_init_interrupt(struct device *dev)
 		       0, K_NO_WAIT);
 #elif defined(CONFIG_STTS751_TRIGGER_GLOBAL_THREAD)
 	stts751->work.handler = stts751_work_cb;
-	stts751->dev = dev;
 #endif /* CONFIG_STTS751_TRIGGER_OWN_THREAD */
 
 	ret = gpio_pin_configure(stts751->gpio, cfg->event_pin,

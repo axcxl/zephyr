@@ -18,7 +18,7 @@ Requirements
 Display shield and a board which provides a configuration
 for Arduino connectors, for example:
 
-- :ref:`adafruit_2_8_tft_touch_v2` and :ref:`nrf52840_pca10056`
+- :ref:`adafruit_2_8_tft_touch_v2` and :ref:`nrf52840dk_nrf52840`
 - :ref:`ssd1306_128_shield` and :ref:`frdm_k64f`
 
 or a simulated display environment in a native Posix application:
@@ -39,11 +39,17 @@ or
 Building and Running
 ********************
 
-Example building for :ref:`nrf52840_pca10056`:
+.. note::
+   When deferred logging is enabled you will likely need to increase
+   :option:`CONFIG_LOG_STRDUP_BUF_COUNT` and/or
+   :option:`CONFIG_LOG_STRDUP_MAX_STRING` to make sure no messages are lost or
+   truncated.
+
+Example building for :ref:`nrf52840dk_nrf52840`:
 
 .. zephyr-app-commands::
    :zephyr-app: samples/gui/lvgl
-   :board: nrf52840_pca10056
+   :board: nrf52840dk_nrf52840
    :shield: adafruit_2_8_tft_touch_v2
    :goals: build flash
 

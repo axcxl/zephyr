@@ -68,22 +68,10 @@ static inline int z_vrfy_gpio_pin_interrupt_configure(struct device *port,
 }
 #include <syscalls/gpio_pin_interrupt_configure_mrsh.c>
 
-static inline int z_vrfy_gpio_enable_callback(struct device *port,
-					     gpio_pin_t pin)
-{
-	return z_impl_gpio_enable_callback((struct device *)port, pin);
-}
-#include <syscalls/gpio_enable_callback_mrsh.c>
-
-static inline int z_vrfy_gpio_disable_callback(struct device *port,
-					      gpio_pin_t pin)
-{
-	return z_impl_gpio_disable_callback((struct device *)port, pin);
-}
-#include <syscalls/gpio_disable_callback_mrsh.c>
-
 static inline int z_vrfy_gpio_get_pending_int(struct device *dev)
 {
+	Z_OOPS(Z_SYSCALL_DRIVER_GPIO(dev, get_pending_int));
+
 	return z_impl_gpio_get_pending_int((struct device *)dev);
 }
 #include <syscalls/gpio_get_pending_int_mrsh.c>

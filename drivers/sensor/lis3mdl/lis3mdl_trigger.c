@@ -4,6 +4,8 @@
  * SPDX-License-Identifier: Apache-2.0
  */
 
+#define DT_DRV_COMPAT st_lis3mdl_magn
+
 #include <device.h>
 #include <drivers/i2c.h>
 #include <sys/__assert.h>
@@ -20,11 +22,20 @@ int lis3mdl_trigger_set(struct device *dev,
 			sensor_trigger_handler_t handler)
 {
 	struct lis3mdl_data *drv_data = dev->driver_data;
+	int16_t buf[3];
+	int ret;
 
 	__ASSERT_NO_MSG(trig->type == SENSOR_TRIG_DATA_READY);
 
+	/* dummy read: re-trigger interrupt */
+	ret = i2c_burst_read(drv_data->i2c, DT_INST_REG_ADDR(0),
+			     LIS3MDL_REG_SAMPLE_START, (uint8_t *)buf, 6);
+	if (ret != 0) {
+		return ret;
+	}
+
 	gpio_pin_interrupt_configure(drv_data->gpio,
-			DT_INST_0_ST_LIS3MDL_MAGN_IRQ_GPIOS_PIN,
+			DT_INST_GPIO_PIN(0, irq_gpios),
 			GPIO_INT_DISABLE);
 
 	drv_data->data_ready_handler = handler;
@@ -35,14 +46,14 @@ int lis3mdl_trigger_set(struct device *dev,
 	drv_data->data_ready_trigger = *trig;
 
 	gpio_pin_interrupt_configure(drv_data->gpio,
-			DT_INST_0_ST_LIS3MDL_MAGN_IRQ_GPIOS_PIN,
+			DT_INST_GPIO_PIN(0, irq_gpios),
 			GPIO_INT_EDGE_TO_ACTIVE);
 
 	return 0;
 }
 
 static void lis3mdl_gpio_callback(struct device *dev,
-				  struct gpio_callback *cb, u32_t pins)
+				  struct gpio_callback *cb, uint32_t pins)
 {
 	struct lis3mdl_data *drv_data =
 		CONTAINER_OF(cb, struct lis3mdl_data, gpio_cb);
@@ -50,7 +61,7 @@ static void lis3mdl_gpio_callback(struct device *dev,
 	ARG_UNUSED(pins);
 
 	gpio_pin_interrupt_configure(dev,
-				     DT_INST_0_ST_LIS3MDL_MAGN_IRQ_GPIOS_PIN,
+				     DT_INST_GPIO_PIN(0, irq_gpios),
 				     GPIO_INT_DISABLE);
 
 #if defined(CONFIG_LIS3MDL_TRIGGER_OWN_THREAD)
@@ -71,7 +82,7 @@ static void lis3mdl_thread_cb(void *arg)
 	}
 
 	gpio_pin_interrupt_configure(drv_data->gpio,
-			DT_INST_0_ST_LIS3MDL_MAGN_IRQ_GPIOS_PIN,
+			DT_INST_GPIO_PIN(0, irq_gpios),
 			GPIO_INT_EDGE_TO_ACTIVE);
 }
 
@@ -106,21 +117,21 @@ int lis3mdl_init_interrupt(struct device *dev)
 
 	/* setup data ready gpio interrupt */
 	drv_data->gpio =
-		device_get_binding(DT_INST_0_ST_LIS3MDL_MAGN_IRQ_GPIOS_CONTROLLER);
+		device_get_binding(DT_INST_GPIO_LABEL(0, irq_gpios));
 	if (drv_data->gpio == NULL) {
 		LOG_DBG("Cannot get pointer to %s device.",
-			    DT_INST_0_ST_LIS3MDL_MAGN_IRQ_GPIOS_CONTROLLER);
+			    DT_INST_GPIO_LABEL(0, irq_gpios));
 		return -EINVAL;
 	}
 
 	gpio_pin_configure(drv_data->gpio,
-			   DT_INST_0_ST_LIS3MDL_MAGN_IRQ_GPIOS_PIN,
+			   DT_INST_GPIO_PIN(0, irq_gpios),
 			   GPIO_INPUT |
-			   DT_INST_0_ST_LIS3MDL_MAGN_IRQ_GPIOS_FLAGS);
+			   DT_INST_GPIO_FLAGS(0, irq_gpios));
 
 	gpio_init_callback(&drv_data->gpio_cb,
 			   lis3mdl_gpio_callback,
-			   BIT(DT_INST_0_ST_LIS3MDL_MAGN_IRQ_GPIOS_PIN));
+			   BIT(DT_INST_GPIO_PIN(0, irq_gpios)));
 
 	if (gpio_add_callback(drv_data->gpio, &drv_data->gpio_cb) < 0) {
 		LOG_DBG("Could not set gpio callback.");
@@ -130,13 +141,6 @@ int lis3mdl_init_interrupt(struct device *dev)
 	/* clear data ready interrupt line by reading sample data */
 	if (lis3mdl_sample_fetch(dev, SENSOR_CHAN_ALL) < 0) {
 		LOG_DBG("Could not clear data ready interrupt line.");
-		return -EIO;
-	}
-
-	/* enable interrupt */
-	if (i2c_reg_write_byte(drv_data->i2c, DT_INST_0_ST_LIS3MDL_MAGN_BASE_ADDRESS,
-			       LIS3MDL_REG_INT_CFG, LIS3MDL_INT_XYZ_EN) < 0) {
-		LOG_DBG("Could not enable interrupt.");
 		return -EIO;
 	}
 
@@ -154,7 +158,7 @@ int lis3mdl_init_interrupt(struct device *dev)
 #endif
 
 	gpio_pin_interrupt_configure(drv_data->gpio,
-			DT_INST_0_ST_LIS3MDL_MAGN_IRQ_GPIOS_PIN,
+			DT_INST_GPIO_PIN(0, irq_gpios),
 			GPIO_INT_EDGE_TO_ACTIVE);
 
 	return 0;

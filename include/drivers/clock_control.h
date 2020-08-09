@@ -6,8 +6,20 @@
  * SPDX-License-Identifier: Apache-2.0
  */
 
+/**
+ * @file
+ * @brief Public Clock Control APIs
+ */
+
 #ifndef ZEPHYR_INCLUDE_DRIVERS_CLOCK_CONTROL_H_
 #define ZEPHYR_INCLUDE_DRIVERS_CLOCK_CONTROL_H_
+
+/**
+ * @brief Clock Control Interface
+ * @defgroup clock_control_interface Clock Control Interface
+ * @ingroup io_interfaces
+ * @{
+ */
 
 #include <zephyr/types.h>
 #include <stddef.h>
@@ -92,7 +104,7 @@ typedef int (*clock_control)(struct device *dev, clock_control_subsys_t sys);
 
 typedef int (*clock_control_get)(struct device *dev,
 				 clock_control_subsys_t sys,
-				 u32_t *rate);
+				 uint32_t *rate);
 
 typedef int (*clock_control_async_on_fn)(struct device *dev,
 				   clock_control_subsys_t sys,
@@ -214,13 +226,13 @@ static inline enum clock_control_status clock_control_get_status(
  */
 static inline int clock_control_get_rate(struct device *dev,
 					 clock_control_subsys_t sys,
-					 u32_t *rate)
+					 uint32_t *rate)
 {
 	const struct clock_control_driver_api *api =
 		(const struct clock_control_driver_api *)dev->driver_api;
 
 	__ASSERT(api->get_rate != NULL, "%s not implemented for device %s",
-		__func__, dev->config->name);
+		__func__, dev->name);
 
 	return api->get_rate(dev, sys, rate);
 }
@@ -228,5 +240,9 @@ static inline int clock_control_get_rate(struct device *dev,
 #ifdef __cplusplus
 }
 #endif
+
+/**
+ * @}
+ */
 
 #endif /* ZEPHYR_INCLUDE_DRIVERS_CLOCK_CONTROL_H_ */

@@ -1,7 +1,7 @@
 /* ieee802154_rf2xx_iface.c - ATMEL RF2XX IEEE 802.15.4 Interface */
 
 /*
- * Copyright (c) 2019 Gerson Fernando Budke
+ * Copyright (c) 2019-2020 Gerson Fernando Budke
  *
  * SPDX-License-Identifier: Apache-2.0
  */
@@ -25,7 +25,7 @@ LOG_MODULE_REGISTER(LOG_MODULE_NAME);
 
 void rf2xx_iface_phy_rst(struct device *dev)
 {
-	const struct rf2xx_config *conf = dev->config->config_info;
+	const struct rf2xx_config *conf = dev->config_info;
 	const struct rf2xx_context *ctx = dev->driver_data;
 
 	/* Ensure control lines have correct levels. */
@@ -41,7 +41,7 @@ void rf2xx_iface_phy_rst(struct device *dev)
 }
 void rf2xx_iface_phy_tx_start(struct device *dev)
 {
-	const struct rf2xx_config *conf = dev->config->config_info;
+	const struct rf2xx_config *conf = dev->config_info;
 	const struct rf2xx_context *ctx = dev->driver_data;
 
 	/* Start TX transmission at rise edge */
@@ -52,12 +52,12 @@ void rf2xx_iface_phy_tx_start(struct device *dev)
 	gpio_pin_set(ctx->slptr_gpio, conf->slptr.pin, 0);
 }
 
-u8_t rf2xx_iface_reg_read(struct device *dev,
-			  u8_t addr)
+uint8_t rf2xx_iface_reg_read(struct device *dev,
+			  uint8_t addr)
 {
 	const struct rf2xx_context *ctx = dev->driver_data;
-	u8_t status;
-	u8_t regval = 0;
+	uint8_t status;
+	uint8_t regval = 0;
 
 	addr |= RF2XX_RF_CMD_REG_R;
 
@@ -96,11 +96,11 @@ u8_t rf2xx_iface_reg_read(struct device *dev,
 }
 
 void rf2xx_iface_reg_write(struct device *dev,
-			   u8_t addr,
-			   u8_t data)
+			   uint8_t addr,
+			   uint8_t data)
 {
 	const struct rf2xx_context *ctx = dev->driver_data;
-	u8_t status;
+	uint8_t status;
 
 	addr |= RF2XX_RF_CMD_REG_W;
 
@@ -136,12 +136,12 @@ void rf2xx_iface_reg_write(struct device *dev,
 		(addr & ~(RF2XX_RF_CMD_REG_W)), status, data);
 }
 
-u8_t rf2xx_iface_bit_read(struct device *dev,
-			  u8_t addr,
-			  u8_t mask,
-			  u8_t pos)
+uint8_t rf2xx_iface_bit_read(struct device *dev,
+			  uint8_t addr,
+			  uint8_t mask,
+			  uint8_t pos)
 {
-	u8_t ret;
+	uint8_t ret;
 
 	ret = rf2xx_iface_reg_read(dev, addr);
 	ret &= mask;
@@ -151,12 +151,12 @@ u8_t rf2xx_iface_bit_read(struct device *dev,
 }
 
 void rf2xx_iface_bit_write(struct device *dev,
-			   u8_t reg_addr,
-			   u8_t mask,
-			   u8_t pos,
-			   u8_t new_value)
+			   uint8_t reg_addr,
+			   uint8_t mask,
+			   uint8_t pos,
+			   uint8_t new_value)
 {
-	u8_t current_reg_value;
+	uint8_t current_reg_value;
 
 	current_reg_value = rf2xx_iface_reg_read(dev, reg_addr);
 	current_reg_value &= ~mask;
@@ -167,11 +167,11 @@ void rf2xx_iface_bit_write(struct device *dev,
 }
 
 void rf2xx_iface_frame_read(struct device *dev,
-			    u8_t *data,
-			    u8_t length)
+			    uint8_t *data,
+			    uint8_t length)
 {
 	const struct rf2xx_context *ctx = dev->driver_data;
-	u8_t cmd = RF2XX_RF_CMD_FRAME_R;
+	uint8_t cmd = RF2XX_RF_CMD_FRAME_R;
 
 	const struct spi_buf tx_buf = {
 		.buf = &cmd,
@@ -199,13 +199,13 @@ void rf2xx_iface_frame_read(struct device *dev,
 }
 
 void rf2xx_iface_frame_write(struct device *dev,
-			     u8_t *data,
-			     u8_t length)
+			     uint8_t *data,
+			     uint8_t length)
 {
 	const struct rf2xx_context *ctx = dev->driver_data;
-	u8_t cmd = RF2XX_RF_CMD_FRAME_W;
-	u8_t status;
-	u8_t phr;
+	uint8_t cmd = RF2XX_RF_CMD_FRAME_W;
+	uint8_t status;
+	uint8_t phr;
 
 	/* Sanity check */
 	if (length > 125) {
@@ -247,4 +247,50 @@ void rf2xx_iface_frame_write(struct device *dev,
 
 	LOG_DBG("Frame W: PhyStatus: %02X. length: %02X", status, length);
 	LOG_HEXDUMP_DBG(data, length, "payload");
+}
+
+void rf2xx_iface_sram_read(struct device *dev,
+			    uint8_t address,
+			    uint8_t *data,
+			    uint8_t length)
+{
+	const struct rf2xx_context *ctx = dev->driver_data;
+	uint8_t cmd = RF2XX_RF_CMD_SRAM_R;
+	uint8_t status[2];
+
+	const struct spi_buf tx_buf[2] = {
+		{
+			.buf = &cmd,
+			.len = 1
+		},
+		{
+			.buf = &address,
+			.len = 1
+		},
+	};
+	const struct spi_buf_set tx = {
+		.buffers = tx_buf,
+		.count = 2
+	};
+	const struct spi_buf rx_buf[2] = {
+		{
+			.buf = status,
+			.len = 2
+		},
+		{
+			.buf = data,
+			.len = length
+		},
+	};
+	const struct spi_buf_set rx = {
+		.buffers = rx_buf,
+		.count = 2
+	};
+
+	if (spi_transceive(ctx->spi, &ctx->spi_cfg, &tx, &rx) != 0) {
+		LOG_ERR("Failed to exec rf2xx_sram_read");
+	}
+
+	LOG_DBG("SRAM R: length: %02X, status: %02X", length, status[0]);
+	LOG_HEXDUMP_DBG(data, length, "content");
 }

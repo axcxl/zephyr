@@ -61,8 +61,8 @@ jobs:
     - name: install-pip
       run: |
         pip3 install setuptools
-        pip3 install 'breathe>=4.9.1' 'docutils>=0.14' \
-                     'sphinx>=1.7.5' sphinx_rtd_theme sphinx-tabs \
+        pip3 install 'breathe>=4.9.1,<4.15.0' 'docutils>=0.14' \
+                     'sphinx>=1.7.5,<3.0' sphinx_rtd_theme sphinx-tabs \
                      sphinxcontrib-svg2pdfconverter 'west>=0.6.2'
         pip3 install pyelftools
 
@@ -95,17 +95,18 @@ jobs:
       run: |
         echo "DOC_RELEASE=[$RELEASE]"
         if [ "$RELEASE" == "latest" ]; then
+           export
            echo "publish latest docs"
-           aws s3 sync doc/_build/html s3://docs.zephyrproject.org/latest --delete
+           aws s3 sync  --quiet doc/_build/html s3://docs.zephyrproject.org/latest --delete
            echo "success sync of latest docs"
         else
            DOC_RELEASE=${RELEASE}.0
            echo "publish release docs: ${DOC_RELEASE}"
-           aws s3 sync doc/_build/html s3://docs.zephyrproject.org/${DOC_RELEASE}
+           aws s3 sync  --quiet doc/_build/html s3://docs.zephyrproject.org/${DOC_RELEASE}
            echo "success sync of rel docs"
         fi
         if [ -d doc/_build/doxygen/html ]; then
            echo "publish doxygen"
-           aws s3 sync doc/_build/doxygen/html s3://docs.zephyrproject.org/apidoc/${RELEASE} --delete
+           aws s3 sync  --quiet doc/_build/doxygen/html s3://docs.zephyrproject.org/apidoc/${RELEASE} --delete
            echo "success publish of doxygen"
         fi

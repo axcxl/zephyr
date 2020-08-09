@@ -1,6 +1,6 @@
 .. _stm32f3_disco_board:
 
-ST STM32F3 DISCOVERY
+ST STM32F3 Discovery
 ####################
 
 Overview
@@ -95,6 +95,8 @@ features:
 | USB       | on-chip    | USB device                          |
 +-----------+------------+-------------------------------------+
 | CAN       | on-chip    | CAN                                 |
++-----------+------------+-------------------------------------+
+| IWDG      | on-chip    | Independent WatchDoG                |
 +-----------+------------+-------------------------------------+
 
 Other hardware features are not yet supported on Zephyr porting.

@@ -3,13 +3,6 @@
 # Copyright (c) 2019 Carlo Caione <ccaione@baylibre.com>
 # SPDX-License-Identifier: Apache-2.0
 
-if ARM64
-
-config CPU_CORTEX
-	bool
-	help
-	  This option signifies the use of a CPU of the Cortex family.
-
 config CPU_CORTEX_A
 	bool
 	select CPU_CORTEX
@@ -23,6 +16,13 @@ config CPU_CORTEX_A53
 	select ARMV8_A
 	help
 	  This option signifies the use of a Cortex-A53 CPU
+
+config CPU_CORTEX_A72
+	bool
+	select CPU_CORTEX_A
+	select ARMV8_A
+	help
+	  This option signifies the use of a Cortex-A72 CPU
 
 config SWITCH_TO_EL1
 	bool "Switch to EL1 at boot"
@@ -49,9 +49,6 @@ config TEST_EXTRA_STACKSIZE
 config SYSTEM_WORKQUEUE_STACK_SIZE
 	default 4096
 
-config OFFLOAD_WORKQUEUE_STACK_SIZE
-	default 4096
-
 config CMSIS_THREAD_MAX_STACK_SIZE
 	default 4096
 
@@ -69,6 +66,7 @@ if CPU_CORTEX_A
 config ARMV8_A
 	bool
 	select ATOMIC_OPERATIONS_BUILTIN
+	select CPU_HAS_MMU
 	help
 	  This option signifies the use of an ARMv8-A processor
 	  implementation.
@@ -90,6 +88,83 @@ config GEN_ISR_TABLES
 config GEN_IRQ_VECTOR_TABLE
 	default n
 
-endif # CPU_CORTEX_A
+config ARM_MMU
+	bool "ARM MMU Support"
+	default y
+	help
+	  Memory Management Unit support.
 
-endif # ARM64
+if ARM_MMU
+
+config MAX_XLAT_TABLES
+	int "Maximum numbers of translation tables"
+	default 7
+	help
+	  This option specifies the maximum numbers of translation tables
+	  excluding the base translation table. Based on this, translation
+	  tables are allocated at compile time and used at runtime as needed.
+	  If the runtime need exceeds preallocated numbers of translation
+	  tables, it will result in assert. Number of translation tables
+	  required is decided based on how many discrete memory regions
+	  (both normal and device memory) are present on given platform and
+	  how much granularity is required while assigning attributes
+	  to these memory regions.
+
+choice
+	prompt "Virtual address space size"
+	default ARM64_VA_BITS_32
+	help
+	  Allows choosing one of multiple possible virtual address
+	  space sizes. The level of translation table is determined by
+	  a combination of page size and virtual address space size.
+
+config ARM64_VA_BITS_32
+	bool "32-bit"
+
+config ARM64_VA_BITS_36
+	bool "36-bit"
+
+config ARM64_VA_BITS_42
+	bool "42-bit"
+
+config ARM64_VA_BITS_48
+	bool "48-bit"
+endchoice
+
+config ARM64_VA_BITS
+	int
+	default 32 if ARM64_VA_BITS_32
+	default 36 if ARM64_VA_BITS_36
+	default 42 if ARM64_VA_BITS_42
+	default 48 if ARM64_VA_BITS_48
+
+choice
+	prompt "Physical address space size"
+	default ARM64_PA_BITS_32
+	help
+	  Choose the maximum physical address range that the kernel will
+	  support.
+
+config ARM64_PA_BITS_32
+	bool "32-bit"
+
+config ARM64_PA_BITS_36
+	bool "36-bit"
+
+config ARM64_PA_BITS_42
+	bool "42-bit"
+
+config ARM64_PA_BITS_48
+	bool "48-bit"
+endchoice
+
+config ARM64_PA_BITS
+	int
+	default 32 if ARM64_PA_BITS_32
+	default 36 if ARM64_PA_BITS_36
+	default 42 if ARM64_PA_BITS_42
+	default 48 if ARM64_PA_BITS_48
+
+endif # ARM_MMU
+
+endif # CPU_CORTEX_A

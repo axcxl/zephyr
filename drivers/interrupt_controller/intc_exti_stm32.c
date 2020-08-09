@@ -11,7 +11,8 @@
  *
  * Driver is currently implemented to support following EXTI lines
  * STM32F1/STM32F3: Lines 0 to 15. Lines > 15 not supported
- * STM32F0/STM32L0/STM32L4/STM32G0/STM32G4: Lines 0 to 15. Lines > 15 are not mapped on an IRQ
+ * STM32F0/STM32L0/STM32L4/STM32L5/STM32G0/STM32G4: Lines 0 to 15.
+ * Lines > 15 are not mapped on an IRQ
  * STM32F2/STM32F4: Lines 0 to 15, 16, 17 18, 21 and 22. Others not supported
  * STM32F7: Lines 0 to 15, 16, 17 18, 21, 22 and 23. Others not supported
  *
@@ -20,6 +21,8 @@
 #include <soc.h>
 #include <sys/__assert.h>
 #include <drivers/interrupt_controller/exti_stm32.h>
+
+#include "stm32_hsem.h"
 
 #if defined(CONFIG_SOC_SERIES_STM32F0X) || \
     defined(CONFIG_SOC_SERIES_STM32L0X) || \
@@ -68,7 +71,8 @@ const IRQn_Type exti_irq_table[] = {
 	PVD_IRQn, 0xFF, OTG_FS_WKUP_IRQn, 0xFF,
 	0xFF, TAMP_STAMP_IRQn, RTC_WKUP_IRQn, LPTIM1_IRQn
 };
-#elif defined(CONFIG_SOC_SERIES_STM32MP1X)
+#elif defined(CONFIG_SOC_SERIES_STM32MP1X) || \
+	defined(CONFIG_SOC_SERIES_STM32L5X)
 const IRQn_Type exti_irq_table[] = {
 	EXTI0_IRQn, EXTI1_IRQn, EXTI2_IRQn, EXTI3_IRQn,
 	EXTI4_IRQn, EXTI5_IRQn, EXTI6_IRQn, EXTI7_IRQn,
@@ -104,7 +108,11 @@ void stm32_exti_enable(int line)
 	}
 
 	/* Enable requested line interrupt */
+#if defined(CONFIG_SOC_SERIES_STM32H7X) && defined(CONFIG_CPU_CORTEX_M4)
+	LL_C2_EXTI_EnableIT_0_31(1 << line);
+#else
 	LL_EXTI_EnableIT_0_31(1 << line);
+#endif
 
 	/* Enable exti irq interrupt */
 	irq_enable(irqnum);
@@ -112,11 +120,18 @@ void stm32_exti_enable(int line)
 
 void stm32_exti_disable(int line)
 {
+	z_stm32_hsem_lock(CFG_HW_EXTI_SEMID, HSEM_LOCK_DEFAULT_RETRY);
+
 	if (line < 32) {
+#if defined(CONFIG_SOC_SERIES_STM32H7X) && defined(CONFIG_CPU_CORTEX_M4)
+		LL_C2_EXTI_DisableIT_0_31(1 << line);
+#else
 		LL_EXTI_DisableIT_0_31(1 << line);
+#endif
 	} else {
 		__ASSERT_NO_MSG(line);
 	}
+	z_stm32_hsem_unlock(CFG_HW_EXTI_SEMID);
 }
 
 /**
@@ -127,9 +142,13 @@ void stm32_exti_disable(int line)
 static inline int stm32_exti_is_pending(int line)
 {
 	if (line < 32) {
-#if defined(CONFIG_SOC_SERIES_STM32MP1X) || defined(CONFIG_SOC_SERIES_STM32G0X)
+#if defined(CONFIG_SOC_SERIES_STM32MP1X) || \
+	defined(CONFIG_SOC_SERIES_STM32G0X) || \
+	defined(CONFIG_SOC_SERIES_STM32L5X)
 		return (LL_EXTI_IsActiveRisingFlag_0_31(1 << line) ||
 			LL_EXTI_IsActiveFallingFlag_0_31(1 << line));
+#elif defined(CONFIG_SOC_SERIES_STM32H7X) && defined(CONFIG_CPU_CORTEX_M4)
+		return LL_C2_EXTI_IsActiveFlag_0_31(1 << line);
 #else
 		return LL_EXTI_IsActiveFlag_0_31(1 << line);
 #endif
@@ -147,9 +166,13 @@ static inline int stm32_exti_is_pending(int line)
 static inline void stm32_exti_clear_pending(int line)
 {
 	if (line < 32) {
-#if defined(CONFIG_SOC_SERIES_STM32MP1X) || defined(CONFIG_SOC_SERIES_STM32G0X)
+#if defined(CONFIG_SOC_SERIES_STM32MP1X) || \
+	defined(CONFIG_SOC_SERIES_STM32G0X) || \
+	defined(CONFIG_SOC_SERIES_STM32L5X)
 		LL_EXTI_ClearRisingFlag_0_31(1 << line);
 		LL_EXTI_ClearFallingFlag_0_31(1 << line);
+#elif defined(CONFIG_SOC_SERIES_STM32H7X) && defined(CONFIG_CPU_CORTEX_M4)
+		LL_C2_EXTI_ClearFlag_0_31(1 << line);
 #else
 		LL_EXTI_ClearFlag_0_31(1 << line);
 #endif
@@ -164,6 +187,8 @@ void stm32_exti_trigger(int line, int trigger)
 	if (line >= 32) {
 		__ASSERT_NO_MSG(line);
 	}
+
+	z_stm32_hsem_lock(CFG_HW_EXTI_SEMID, HSEM_LOCK_DEFAULT_RETRY);
 
 	switch (trigger) {
 	case STM32_EXTI_TRIG_NONE:
@@ -185,6 +210,7 @@ void stm32_exti_trigger(int line, int trigger)
 	default:
 		__ASSERT_NO_MSG(trigger);
 	}
+	z_stm32_hsem_unlock(CFG_HW_EXTI_SEMID);
 }
 
 /**
@@ -263,7 +289,8 @@ static inline void __stm32_exti_isr_4(void *arg)
 	__stm32_exti_isr(4, 5, arg);
 }
 
-#if defined(CONFIG_SOC_SERIES_STM32MP1X)
+#if defined(CONFIG_SOC_SERIES_STM32MP1X) || \
+	defined(CONFIG_SOC_SERIES_STM32L5X)
 static inline void __stm32_exti_isr_5(void *arg)
 {
 	__stm32_exti_isr(5, 6, arg);
@@ -437,6 +464,7 @@ static void __stm32_exti_connect_irqs(struct device *dev)
 	defined(CONFIG_SOC_SERIES_STM32H7X) || \
 	defined(CONFIG_SOC_SERIES_STM32L1X) || \
 	defined(CONFIG_SOC_SERIES_STM32L4X) || \
+	defined(CONFIG_SOC_SERIES_STM32L5X) || \
 	defined(CONFIG_SOC_SERIES_STM32MP1X) || \
 	defined(CONFIG_SOC_SERIES_STM32WBX) || \
 	defined(CONFIG_SOC_SERIES_STM32G4X)
@@ -467,7 +495,8 @@ static void __stm32_exti_connect_irqs(struct device *dev)
 		CONFIG_EXTI_STM32_EXTI4_IRQ_PRI,
 		__stm32_exti_isr_4, DEVICE_GET(exti_stm32),
 		0);
-#ifndef CONFIG_SOC_SERIES_STM32MP1X
+#if !defined(CONFIG_SOC_SERIES_STM32MP1X) && \
+	!defined(CONFIG_SOC_SERIES_STM32L5X)
 	IRQ_CONNECT(EXTI9_5_IRQn,
 		CONFIG_EXTI_STM32_EXTI9_5_IRQ_PRI,
 		__stm32_exti_isr_9_5, DEVICE_GET(exti_stm32),
@@ -521,7 +550,7 @@ static void __stm32_exti_connect_irqs(struct device *dev)
 		CONFIG_EXTI_STM32_EXTI15_IRQ_PRI,
 		__stm32_exti_isr_15, DEVICE_GET(exti_stm32),
 		0);
-#endif /* CONFIG_SOC_SERIES_STM32MP1X */
+#endif /* CONFIG_SOC_SERIES_STM32MP1X || CONFIG_SOC_SERIES_STM32L5X */
 
 #if defined(CONFIG_SOC_SERIES_STM32F2X) || \
 	defined(CONFIG_SOC_SERIES_STM32F4X) || \

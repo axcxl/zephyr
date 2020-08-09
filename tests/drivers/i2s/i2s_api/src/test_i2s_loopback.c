@@ -4,13 +4,6 @@
  * SPDX-License-Identifier: Apache-2.0
  */
 
-/*
- * @addtogroup t_i2s_api
- * @{
- * @defgroup t_i2s_loopback test_i2s_loopback
- * @brief TestPurpose: verify I2S master can read and write in loopback mode
- * @}
- */
 
 #include <zephyr.h>
 #include <ztest.h>
@@ -219,7 +212,7 @@ void test_i2s_rx_sync_start(void)
 
 	/* Prefill TX queue */
 	for (int n = 0; n < NUM_TX_BLOCKS; n++) {
-		fill_buf_const((u16_t *)buf, 1, 2);
+		fill_buf_const((uint16_t *)buf, 1, 2);
 		ret = i2s_buf_write(dev_i2s, buf, BLOCK_SIZE);
 		zassert_equal(ret, TC_PASS, NULL);
 		TC_PRINT("%d->OK\n", n);
@@ -236,7 +229,7 @@ void test_i2s_rx_sync_start(void)
 	zassert_equal(ret, 0, "RX START trigger failed");
 	ret = i2s_buf_read(dev_i2s, buf, &rx_size);
 	zassert_equal(ret, TC_PASS, NULL);
-	ret = verify_buf_const((u16_t *)buf, 1, 2);
+	ret = verify_buf_const((uint16_t *)buf, 1, 2);
 
 	zassert_equal(ret, TC_PASS, NULL);
 	TC_PRINT("%d<-OK\n", 1);
@@ -270,8 +263,6 @@ void test_i2s_rx_empty_timeout(void)
 	ret = i2s_buf_read(dev_i2s, buf, &rx_size);
 	zassert_equal(ret, -EAGAIN, "i2s_read did not timed out");
 }
-
-#define TEST_I2S_TRANSFER_RESTART_PAUSE_LENGTH_US  1000
 
 /** @brief Re-start I2S transfer.
  *
@@ -319,7 +310,7 @@ void test_i2s_transfer_restart(void)
 	TC_PRINT("Stop transmission\n");
 
 	/* Keep interface inactive */
-	k_sleep(TEST_I2S_TRANSFER_RESTART_PAUSE_LENGTH_US);
+	k_sleep(K_MSEC(1000));
 
 	TC_PRINT("Start transmission\n");
 
@@ -352,8 +343,6 @@ void test_i2s_transfer_restart(void)
 	zassert_equal(ret, TC_PASS, NULL);
 	TC_PRINT("%d<-OK\n", 3);
 }
-
-#define TEST_I2S_TRANSFER_RX_OVERRUN_PAUSE_LENGTH_US  200
 
 /** @brief RX buffer overrun.
  *
@@ -396,7 +385,7 @@ void test_i2s_transfer_rx_overrun(void)
 	zassert_equal(ret, 0, "TX DRAIN trigger failed");
 
 	/* Wait for transmission to finish */
-	k_sleep(TEST_I2S_TRANSFER_RX_OVERRUN_PAUSE_LENGTH_US);
+	k_sleep(K_MSEC(200));
 
 	/* Read all available data blocks in RX queue */
 	for (int i = 0; i < NUM_RX_BLOCKS; i++) {
