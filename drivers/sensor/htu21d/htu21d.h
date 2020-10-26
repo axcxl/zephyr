@@ -31,8 +31,13 @@
 struct htu21d_data {
 	struct device *i2c;
 
-	s16_t humidity_out;
-	s16_t temp_out;
+	int16_t humidity_out;
+	int16_t temp_out;
+};
+
+struct htu21d_config {
+    const char *i2c_bus;
+    uint16_t i2c_addr;
 };
 
 #endif /* __SENSOR_HTU21D__ */
